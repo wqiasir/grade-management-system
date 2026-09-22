@@ -1,0 +1,32 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# --- 虚拟环境 ---
+.venv/
+venv/
+
+# --- 本地实例：SQLite 数据库与本地配置，不入版本控制 ---
+instance/
+
+# --- 测试与覆盖率 ---
+.pytest_cache/
+pytest-cache-files-*/
+.coverage
+coverage.xml
+htmlcov/
+
+# --- 本地工作用临时目录 ---
+.tmp/
+
+# --- 环境变量 ---
+.env
+
+# --- 编辑器 / 系统 ---
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini

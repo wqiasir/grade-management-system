@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>学生成绩管理系统</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="page">
+    <h1>学生成绩管理系统</h1>
+    <p class="ok">系统已启动</p>
+    <p class="meta">
+      版本 {{ version }} ·
+      数据库 <code>{{ db_path }}</code>
+    </p>
+
+    <h2>数据表（共 {{ tables | length }} 张）</h2>
+    <table class="grid">
+      <thead>
+        <tr><th>表名</th><th>状态</th><th>记录数</th></tr>
+      </thead>
+      <tbody>
+        {% for t in tables %}
+        <tr>
+          <td><code>{{ t.name }}</code></td>
+          <td>{% if t.built %}<span class="yes">已建表</span>{% else %}<span class="no">未建表</span>{% endif %}</td>
+          <td>{{ t.rows if t.rows is not none else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% if tables | rejectattr('built') | list %}
+    <p class="hint">还有表未创建，请先执行 <code>flask init-db</code>。</p>
+    {% endif %}
+
+    <footer>R1 — 项目骨架与数据库</footer>
+  </main>
+</body>
+</html>
