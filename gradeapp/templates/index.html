@@ -1,41 +1,49 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>学生成绩管理系统</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
-  <main class="page">
-    <h1>学生成绩管理系统</h1>
-    <p class="ok">系统已启动</p>
-    <p class="meta">
-      版本 {{ version }} ·
-      数据库 <code>{{ db_path }}</code>
+{% extends "base.html" %}
+
+{% block title %}首页 · 学生成绩管理系统{% endblock %}
+
+{% block content %}
+<h1>学生成绩管理系统</h1>
+<p class="ok">系统已启动</p>
+<p class="meta">
+  版本 {{ version }} ·
+  数据库 <code>{{ db_path }}</code>
+</p>
+
+<section class="card">
+  <h2>当前登录状态</h2>
+  {% if g.user %}
+    <p>
+      已登录：<strong>{{ g.user.real_name }}</strong>
+      <span class="badge">{{ role_labels.get(g.user.role, g.user.role) }}</span>
+      <span class="meta">（用户名 <code>{{ g.user.username }}</code>）</span>
     </p>
+    <p class="hint">会话已保持，刷新页面或重新打开浏览器仍处于登录状态；点击右上角"退出登录"结束会话。</p>
+  {% else %}
+    <p>当前为 <strong>未登录</strong> 状态，请先 <a href="{{ url_for('auth.login') }}">登录</a>。</p>
+    <p class="hint">演示账号见登录页；亦可执行 <code>flask seed</code> 生成种子账号。</p>
+  {% endif %}
+</section>
 
-    <h2>数据表（共 {{ tables | length }} 张）</h2>
-    <table class="grid">
-      <thead>
-        <tr><th>表名</th><th>状态</th><th>记录数</th></tr>
-      </thead>
-      <tbody>
-        {% for t in tables %}
-        <tr>
-          <td><code>{{ t.name }}</code></td>
-          <td>{% if t.built %}<span class="yes">已建表</span>{% else %}<span class="no">未建表</span>{% endif %}</td>
-          <td>{{ t.rows if t.rows is not none else '—' }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+<h2>数据表（共 {{ tables | length }} 张）</h2>
+<table class="grid">
+  <thead>
+    <tr><th>表名</th><th>状态</th><th>记录数</th></tr>
+  </thead>
+  <tbody>
+    {% for t in tables %}
+    <tr>
+      <td><code>{{ t.name }}</code></td>
+      <td>{% if t.built %}<span class="yes">已建表</span>{% else %}<span class="no">未建表</span>{% endif %}</td>
+      <td>{{ t.rows if t.rows is not none else '—' }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
 
-    {% if tables | rejectattr('built') | list %}
-    <p class="hint">还有表未创建，请先执行 <code>flask init-db</code>。</p>
-    {% endif %}
+{% if tables | rejectattr('built') | list %}
+<p class="hint">还有表未创建，请先执行 <code>flask init-db</code>。</p>
+{% endif %}
+{% endblock %}
 
-    <footer>R1 — 项目骨架与数据库</footer>
-  </main>
-</body>
-</html>
+{% block footer %}R2 — 用户认证{% endblock %}

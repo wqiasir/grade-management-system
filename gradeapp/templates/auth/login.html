@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}登录 · 学生成绩管理系统{% endblock %}
+
+{% block content %}
+<section class="card auth-card">
+  <h1>登录</h1>
+  <p class="meta">请使用管理员分配的账号登录。本系统不开放自主注册。</p>
+
+  <form method="post" class="form" novalidate>
+    {{ form.hidden_tag() }}
+
+    <div class="field">
+      {{ form.username.label }}
+      {{ form.username(class="input", autocomplete="username", autofocus=true) }}
+      {% for error in form.username.errors %}
+        <p class="field-error">{{ error }}</p>
+      {% endfor %}
+    </div>
+
+    <div class="field">
+      {{ form.password.label }}
+      {{ form.password(class="input", autocomplete="current-password") }}
+      {% for error in form.password.errors %}
+        <p class="field-error">{{ error }}</p>
+      {% endfor %}
+    </div>
+
+    <div class="form-actions">
+      {{ form.submit(class="btn btn-primary") }}
+    </div>
+  </form>
+</section>
+
+<section class="card">
+  <h2>演示账号</h2>
+  <p class="hint">执行 <code>flask seed</code> 后可用以下账号登录（仅用于教学演示）：</p>
+  <table class="grid">
+    <thead>
+      <tr><th>角色</th><th>用户名</th><th>口令</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>管理员</td><td><code>admin</code></td><td><code>admin123</code></td></tr>
+      <tr><td>教师</td><td><code>teacher</code></td><td><code>teacher123</code></td></tr>
+      <tr><td>学生</td><td><code>student</code></td><td><code>student123</code></td></tr>
+    </tbody>
+  </table>
+</section>
+{% endblock %}
+
+{% block footer %}R2 — 用户认证{% endblock %}

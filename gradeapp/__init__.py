@@ -1,6 +1,7 @@
 """学生成绩管理系统 —— 应用工厂。
 
 R1 交付物：可运行的 Flask 应用、6 张表的 ORM 定义、Alembic 迁移、``init-db`` / ``seed`` 命令。
+R2 交付物：认证蓝图（``gradeapp/auth.py``）、``base.html`` + 登录页、会话保持。
 架构参考 Flask 官方教程（Flaskr）的应用工厂与测试夹具写法，业务代码全部自写。
 """
 
@@ -8,6 +9,7 @@ from __future__ import annotations
 
 import os
 import secrets
+from datetime import timedelta
 from pathlib import Path
 
 import click
@@ -54,16 +56,29 @@ def create_app(test_config: dict | None = None) -> Flask:
 
     Path(app.instance_path).mkdir(parents=True, exist_ok=True)
 
+    # 会话保持：登录后 7 天有效；cookie 见不得 JS，SameSite 防跨站携带
+    app.config.setdefault("PERMANENT_SESSION_LIFETIME", timedelta(days=7))
+    app.config.setdefault("SESSION_COOKIE_HTTPONLY", True)
+    app.config.setdefault("SESSION_COOKIE_SAMESITE", "Lax")
+
     db.init_app(app)
     migrate.init_app(app, db)
     csrf.init_app(app)
 
     from . import models  # noqa: F401  —— 导入模型，注册到 db.metadata 供 Alembic 使用
 
+    _register_blueprints(app)
     _register_views(app)
     _register_commands(app)
 
     return app
+
+
+def _register_blueprints(app: Flask) -> None:
+    """注册蓝图：R2 只有认证蓝图，后续轮次在此追加 admin / score / report。"""
+    from .auth import bp as auth_bp
+
+    app.register_blueprint(auth_bp)
 
 
 # --------------------------------------------------------------------------- #

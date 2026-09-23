@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}学生成绩管理系统{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <nav class="topnav">
+    <div class="nav-inner">
+      <a class="brand" href="{{ url_for('index') }}">学生成绩管理系统</a>
+
+      <ul class="nav-links">
+        <li><a href="{{ url_for('index') }}">首页</a></li>
+        {% if g.user %}
+          {# 按角色渲染导航：仅前端隐藏不构成权限控制，服务端仍需鉴权（第 11 节） #}
+          {% if g.user.role == 'admin' %}
+            <li><span class="nav-pending" title="R4 / R5 实现">学生管理</span></li>
+            <li><span class="nav-pending" title="R4 / R5 实现">账号管理</span></li>
+          {% elif g.user.role == 'teacher' %}
+            <li><span class="nav-pending" title="R7 实现">我的课程</span></li>
+          {% elif g.user.role == 'student' %}
+            <li><span class="nav-pending" title="R6 实现">选课</span></li>
+            <li><span class="nav-pending" title="R8 实现">我的成绩</span></li>
+          {% endif %}
+        {% endif %}
+      </ul>
+
+      <div class="nav-user">
+        {% if g.user %}
+          <span class="who">
+            {{ g.user.real_name }}
+            <span class="badge">{{ role_labels.get(g.user.role, g.user.role) }}</span>
+          </span>
+          <form class="inline" method="post" action="{{ url_for('auth.logout') }}">
+            {{ logout_form.hidden_tag() }}
+            <button type="submit" class="btn btn-ghost">退出登录</button>
+          </form>
+        {% else %}
+          <a class="btn btn-primary" href="{{ url_for('auth.login') }}">登录</a>
+        {% endif %}
+      </div>
+    </div>
+  </nav>
+
+  <main class="page">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <ul class="flashes">
+          {% for category, message in messages %}
+            <li class="flash flash-{{ category }}">{{ message }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+
+    <footer>
+      {% block footer %}学生成绩管理系统 · 软件工程课程实践{% endblock %}
+    </footer>
+  </main>
+</body>
+</html>
