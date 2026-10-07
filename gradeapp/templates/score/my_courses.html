@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}我的课程 · 学生成绩管理系统{% endblock %}
+
+{% block content %}
+<h1>我的课程</h1>
+
+{% if g.user.role == 'admin' %}
+  <p class="meta">当前身份：<span class="badge">管理员</span> · 可见范围：<strong>全部课程</strong></p>
+{% elif g.user.role == 'teacher' %}
+  <p class="meta">当前身份：<span class="badge">教师</span> · 可见范围：<strong>仅你授课的课程</strong></p>
+{% else %}
+  <p class="meta">当前身份：<span class="badge">学生</span> · 可见范围：<strong>仅你已选的课程</strong></p>
+{% endif %}
+
+<section class="card">
+  <h2>课程列表（{{ rows | length }} 门）</h2>
+  <table class="grid">
+    <thead>
+      <tr>
+        <th>课程代码</th><th>课程名称</th><th>授课教师</th><th>学期</th>
+        <th>学分 / 学时</th><th>选课人数</th><th>已录成绩</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td><code>{{ row.course.code }}</code></td>
+        <td>{{ row.course.name }}</td>
+        <td>{{ row.course.teacher.name if row.course.teacher else '待安排' }}</td>
+        <td>{{ row.course.semester }}</td>
+        <td>{{ row.course.credit }} / {{ row.course.hours }}</td>
+        <td>{{ row.enrolled }} / {{ row.course.capacity }}</td>
+        <td>{{ row.graded }}</td>
+        <td><a href="{{ url_for('score.course_detail', course_id=row.course.id) }}">详情</a></td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="8" class="hint">
+          {% if g.user.role == 'teacher' %}你名下还没有课程（由管理员在 R5 排课）。
+          {% elif g.user.role == 'student' %}你还没有选课（自主选课在 R6 开放）。
+          {% else %}还没有课程数据。{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<p class="hint">
+  本轮（R3）只保证<strong>看得见、且只看得到自己该看的</strong>：
+  教师的非自授课程、学生的未选课程，直接敲 URL 也会返回 <code>403</code>。
+  成绩录入（R7）、成绩查询（R8）、Excel 导出（R10）在后续轮次接上。
+</p>
+{% endblock %}
+
+{% block footer %}R3 — 角色权限控制（RBAC）· 课程范围按角色收缩{% endblock %}

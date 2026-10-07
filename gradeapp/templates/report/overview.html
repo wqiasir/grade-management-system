@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}统计报表 · 学生成绩管理系统{% endblock %}
+
+{% block content %}
+<h1>统计报表</h1>
+<p class="meta">
+  当前身份：<span class="badge">{{ role_label }}</span> ·
+  数据范围：<strong>{{ scope_hint }}</strong> ·
+  及格线：<strong>{{ summary.pass_score }}</strong> 分
+</p>
+
+<section class="card">
+  <h2>汇总</h2>
+  <div class="stat-grid">
+    <div class="stat"><span class="stat-num">{{ summary.courses }}</span><span class="stat-label">课程数</span></div>
+    <div class="stat"><span class="stat-num">{{ summary.students }}</span><span class="stat-label">学生数</span></div>
+    <div class="stat"><span class="stat-num">{{ summary.teachers }}</span><span class="stat-label">教师数</span></div>
+    <div class="stat"><span class="stat-num">{{ summary.graded }}</span><span class="stat-label">成绩条数</span></div>
+    <div class="stat">
+      <span class="stat-num">{{ summary.average if summary.average is not none else '—' }}</span>
+      <span class="stat-label">平均分</span>
+    </div>
+    <div class="stat"><span class="stat-num">{{ summary.pass_rate }}%</span><span class="stat-label">及格率</span></div>
+  </div>
+  <p class="hint">
+    口径：平均分 = 已录入成绩的算术平均（保留 2 位）；及格率 = 成绩 ≥ {{ summary.pass_score }} 的条数 ÷ 成绩总条数（保留 1 位）。
+    没有成绩的课程不计入平均分样本，及格率按 0% 显示。
+  </p>
+</section>
+
+<section class="card">
+  <h2>课程明细（{{ course_stats | length }} 门）</h2>
+  <table class="grid">
+    <thead>
+      <tr><th>课程</th><th>学期</th><th>选课人数</th><th>成绩条数</th><th>平均分</th><th>及格率</th></tr>
+    </thead>
+    <tbody>
+      {% for row in course_stats %}
+      <tr>
+        <td>
+          <a href="{{ url_for('score.course_detail', course_id=row.course.id) }}">{{ row.course.name }}</a>
+          <span class="meta"><code>{{ row.course.code }}</code></span>
+        </td>
+        <td>{{ row.course.semester }}</td>
+        <td>{{ row.enrolled }}</td>
+        <td>{{ row.graded }}</td>
+        <td>{{ row.average if row.average is not none else '—' }}</td>
+        <td>
+          {{ row.pass_rate }}%
+          <span class="bar"><span class="bar-fill" style="width: {{ row.pass_rate }}%"></span></span>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="hint">当前范围内还没有课程数据。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<p class="hint">
+  R9 会在这里接上 Chart.js 的分数段柱状图与及格率图；本轮先把<strong>统计口径</strong>和
+  <strong>三种角色的数据范围</strong>固定下来（管理员全校 / 教师仅自授课程 / 学生仅本人）。
+</p>
+{% endblock %}
+
+{% block footer %}R3 — 角色权限控制（RBAC）· 统计范围按角色收缩{% endblock %}

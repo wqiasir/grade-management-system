@@ -21,6 +21,8 @@ from sqlalchemy import (
     Integer,
     String,
     UniqueConstraint,
+    func,
+    select,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -70,6 +72,26 @@ class User(db.Model):
 
     def check_password(self, raw_password: str) -> bool:
         return check_password_hash(self.password_hash, raw_password)
+
+    # --- 账号停用保护（R3 账号管理用；不属于第 5 节的字段变更）---
+    def deactivation_blocker(self, actor: Optional["User"] = None) -> Optional[str]:
+        """能否停用本账号？不能则返回原因，能则返回 ``None``。
+
+        两条业务规则，避免管理员把自己或整个系统锁死：
+        1. 不能停用当前登录的自己；
+        2. 系统至少要保留一个可用的管理员账号。
+        """
+        if actor is not None and actor.id == self.id:
+            return "不能停用当前登录的账号。"
+        if self.role == "admin":
+            others = db.session.scalar(
+                select(func.count())
+                .select_from(User)
+                .where(User.role == "admin", User.is_active.is_(True), User.id != self.id)
+            )
+            if not others:
+                return "系统必须保留至少一个可用的管理员账号。"
+        return None
 
     def __repr__(self) -> str:  # pragma: no cover - 调试用
         return f"<User {self.username} ({self.role})>"

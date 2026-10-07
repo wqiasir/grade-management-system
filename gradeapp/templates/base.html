@@ -12,19 +12,14 @@
       <a class="brand" href="{{ url_for('index') }}">学生成绩管理系统</a>
 
       <ul class="nav-links">
-        <li><a href="{{ url_for('index') }}">首页</a></li>
-        {% if g.user %}
-          {# 按角色渲染导航：仅前端隐藏不构成权限控制，服务端仍需鉴权（第 11 节） #}
-          {% if g.user.role == 'admin' %}
-            <li><span class="nav-pending" title="R4 / R5 实现">学生管理</span></li>
-            <li><span class="nav-pending" title="R4 / R5 实现">账号管理</span></li>
-          {% elif g.user.role == 'teacher' %}
-            <li><span class="nav-pending" title="R7 实现">我的课程</span></li>
-          {% elif g.user.role == 'student' %}
-            <li><span class="nav-pending" title="R6 实现">选课</span></li>
-            <li><span class="nav-pending" title="R8 实现">我的成绩</span></li>
+        {# 导航项由 gradeapp/menu.py 按角色生成；未实现的轮次为灰显占位（无链接） #}
+        {% for item in nav_items %}
+          {% if item.url %}
+            <li><a href="{{ item.url }}">{{ item.label }}</a></li>
+          {% else %}
+            <li><span class="nav-pending" title="{{ item.pending }} 实现">{{ item.label }}</span></li>
           {% endif %}
-        {% endif %}
+        {% endfor %}
       </ul>
 
       <div class="nav-user">

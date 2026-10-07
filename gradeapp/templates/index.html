@@ -10,6 +10,116 @@
   数据库 <code>{{ db_path }}</code>
 </p>
 
+{# ---------- R3：按角色渲染的首页（三种角色看到不同内容） ---------- #}
+{% if g.user and g.user.role == 'admin' %}
+<section class="card">
+  <h2>管理员首页 · 账号与基础数据</h2>
+  <div class="stat-grid">
+    <div class="stat"><span class="stat-num">{{ stats.user }}</span><span class="stat-label">账号总数</span></div>
+    <div class="stat"><span class="stat-num">{{ stats.active_user }}</span><span class="stat-label">启用中账号</span></div>
+    <div class="stat"><span class="stat-num">{{ stats.student }}</span><span class="stat-label">学生</span></div>
+    <div class="stat"><span class="stat-num">{{ stats.teacher }}</span><span class="stat-label">教师</span></div>
+    <div class="stat"><span class="stat-num">{{ stats.course }}</span><span class="stat-label">课程</span></div>
+    <div class="stat"><span class="stat-num">{{ stats.enrollment }}</span><span class="stat-label">选课记录</span></div>
+    <div class="stat"><span class="stat-num">{{ stats.score }}</span><span class="stat-label">成绩记录</span></div>
+  </div>
+  <p>
+    <a class="btn btn-primary" href="{{ url_for('admin.user_list') }}">进入账号管理</a>
+    <a class="btn btn-ghost" href="{{ url_for('admin.dashboard') }}">账号总览</a>
+    <a class="btn btn-ghost" href="{{ url_for('report.overview') }}">统计报表</a>
+  </p>
+</section>
+
+<section class="card">
+  <h2>最近创建的账号</h2>
+  <table class="grid">
+    <thead><tr><th>ID</th><th>用户名</th><th>姓名</th><th>角色</th><th>状态</th></tr></thead>
+    <tbody>
+      {% for u in recent %}
+      <tr>
+        <td>{{ u.id }}</td>
+        <td><code>{{ u.username }}</code></td>
+        <td>{{ u.real_name }}</td>
+        <td><span class="badge">{{ role_labels.get(u.role, u.role) }}</span></td>
+        <td>{% if u.is_active %}<span class="yes">启用</span>{% else %}<span class="no">已停用</span>{% endif %}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="hint">还没有账号，执行 <code>flask seed</code> 生成演示账号。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% elif g.user and g.user.role == 'teacher' %}
+<section class="card">
+  <h2>教师首页 · 我的授课情况</h2>
+  <div class="stat-grid">
+    <div class="stat"><span class="stat-num">{{ stats.course }}</span><span class="stat-label">授课课程</span></div>
+    <div class="stat"><span class="stat-num">{{ stats.student }}</span><span class="stat-label">选课学生</span></div>
+    <div class="stat"><span class="stat-num">{{ stats.graded }}</span><span class="stat-label">已录成绩条数</span></div>
+  </div>
+  <p>
+    <a class="btn btn-primary" href="{{ url_for('score.my_courses') }}">查看我的课程</a>
+    <a class="btn btn-ghost" href="{{ url_for('report.overview') }}">本课统计</a>
+  </p>
+  <p class="hint">成绩录入（R7）与 Excel 导入（R10）将在后续轮次开放。</p>
+</section>
+
+<section class="card">
+  <h2>我的课程</h2>
+  <table class="grid">
+    <thead><tr><th>课程代码</th><th>课程名称</th><th>学期</th><th>选课人数</th><th>已录成绩</th></tr></thead>
+    <tbody>
+      {% for row in course_rows %}
+      <tr>
+        <td><code>{{ row.course.code }}</code></td>
+        <td><a href="{{ url_for('score.course_detail', course_id=row.course.id) }}">{{ row.course.name }}</a></td>
+        <td>{{ row.course.semester }}</td>
+        <td>{{ row.enrolled }} / {{ row.course.capacity }}</td>
+        <td>{{ row.graded }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="hint">你名下还没有课程（由管理员在 R5 排课）。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% elif g.user and g.user.role == 'student' %}
+<section class="card">
+  <h2>学生首页 · 我的选课</h2>
+  <div class="stat-grid">
+    <div class="stat"><span class="stat-num">{{ enrolled_mine }}</span><span class="stat-label">已选课程</span></div>
+    <div class="stat"><span class="stat-num">{{ graded_mine }}</span><span class="stat-label">已出成绩条数</span></div>
+  </div>
+  <p>
+    <a class="btn btn-primary" href="{{ url_for('score.my_courses') }}">查看我的课程</a>
+    <a class="btn btn-ghost" href="{{ url_for('report.overview') }}">我的成绩概览</a>
+  </p>
+  <p class="hint">自主选课（R6）与成绩单（R8）将在后续轮次开放。</p>
+</section>
+
+<section class="card">
+  <h2>我的课程</h2>
+  <table class="grid">
+    <thead><tr><th>课程代码</th><th>课程名称</th><th>授课教师</th><th>学期</th><th>学分</th></tr></thead>
+    <tbody>
+      {% for row in course_rows %}
+      <tr>
+        <td><code>{{ row.course.code }}</code></td>
+        <td><a href="{{ url_for('score.course_detail', course_id=row.course.id) }}">{{ row.course.name }}</a></td>
+        <td>{{ row.course.teacher.name if row.course.teacher else '待安排' }}</td>
+        <td>{{ row.course.semester }}</td>
+        <td>{{ row.course.credit }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="hint">你还没有选课（自主选课在 R6 开放）。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
 <section class="card">
   <h2>当前登录状态</h2>
   {% if g.user %}
@@ -46,4 +156,4 @@
 {% endif %}
 {% endblock %}
 
-{% block footer %}R2 — 用户认证{% endblock %}
+{% block footer %}R3 — 角色权限控制（RBAC）{% endblock %}

@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}账号管理 · 学生成绩管理系统{% endblock %}
+
+{% block content %}
+<h1>账号管理</h1>
+<p class="meta">
+  共 <strong>{{ total }}</strong> 个账号（第 {{ page }} / {{ pages }} 页，每页 {{ per_page }} 条）
+  {% if role %} · 已按角色筛选：<span class="badge">{{ role_labels.get(role, role) }}</span>{% endif %}
+  {% if keyword %} · 关键词：<code>{{ keyword }}</code>{% endif %}
+</p>
+
+<form class="filter-bar" method="get" action="{{ url_for('admin.user_list') }}">
+  <label for="role">角色</label>
+  <select class="input input-inline" id="role" name="role">
+    <option value="">全部</option>
+    {% for key, label in role_labels.items() %}
+      <option value="{{ key }}" {% if role == key %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  <label for="q">搜索</label>
+  <input class="input input-inline" id="q" name="q" type="search" value="{{ keyword }}" placeholder="用户名或姓名">
+  <button class="btn btn-primary" type="submit">筛选</button>
+  <a class="btn btn-ghost" href="{{ url_for('admin.user_list') }}">重置</a>
+</form>
+
+<table class="grid">
+  <thead>
+    <tr>
+      <th>ID</th><th>用户名</th><th>姓名</th><th>学号 / 工号</th>
+      <th>角色</th><th>状态</th><th>操作</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for u in users %}
+    <tr>
+      <td>{{ u.id }}</td>
+      <td><code>{{ u.username }}</code></td>
+      <td>{{ display_name(u) }}</td>
+      <td>{{ profile_no(u) }}</td>
+      <td><span class="badge">{{ role_labels.get(u.role, u.role) }}</span></td>
+      <td>{% if u.is_active %}<span class="yes">启用</span>{% else %}<span class="no">已停用</span>{% endif %}</td>
+      <td>
+        {% if u.id == g.user.id %}
+          <span class="hint">当前登录账号</span>
+        {% else %}
+          <form class="inline" method="post" action="{{ url_for('admin.toggle_user', user_id=u.id) }}">
+            {{ toggle_form.hidden_tag() }}
+            <button class="btn btn-ghost" type="submit">
+              {% if u.is_active %}停用{% else %}启用{% endif %}
+            </button>
+          </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7" class="hint">没有符合条件的账号。</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if pages > 1 %}
+<nav class="pager">
+  {% if page > 1 %}
+    <a href="{{ url_for('admin.user_list', role=role or None, q=keyword or None, page=page - 1) }}">上一页</a>
+  {% endif %}
+  <span>第 {{ page }} / {{ pages }} 页</span>
+  {% if page < pages %}
+    <a href="{{ url_for('admin.user_list', role=role or None, q=keyword or None, page=page + 1) }}">下一页</a>
+  {% endif %}
+</nav>
+{% endif %}
+
+<p class="hint">
+  本页只做<strong>停用 / 启用</strong>——新增、改角色、重置口令等写操作属于 R4 的"账号与信息管理"。
+  系统不提供自主注册：账号一律由管理员创建。
+</p>
+{% endblock %}
+
+{% block footer %}R3 — 角色权限控制（RBAC）· 管理员专属页面{% endblock %}

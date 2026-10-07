@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}{{ course.code }} {{ course.name }} · 学生成绩管理系统{% endblock %}
+
+{% block content %}
+<h1>{{ course.name }}</h1>
+<p class="meta">
+  <code>{{ course.code }}</code> ·
+  学期 {{ course.semester }} ·
+  {{ course.credit }} 学分 / {{ course.hours }} 学时 ·
+  容量 {{ course.capacity }} ·
+  授课教师 {{ course.teacher.name if course.teacher else '待安排' }}
+</p>
+<p class="meta">当前身份：{{ role_label }} · 本页为<strong>只读</strong>视图</p>
+
+<section class="card">
+  <h2>选课名单（{{ enrollments | length }} 人）</h2>
+  <table class="grid">
+    <thead>
+      <tr><th>#</th><th>学号</th><th>姓名</th><th>班级</th><th>已录成绩</th></tr>
+    </thead>
+    <tbody>
+      {% for e in enrollments %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td><code>{{ e.student.sno if e.student else '—' }}</code></td>
+        <td>{{ e.student.name if e.student else '—' }}</td>
+        <td>{{ e.student.class_name if e.student else '—' }}</td>
+        <td>
+          {% set items = score_map.get(e.id, []) %}
+          {% if items %}
+            {% for s in items %}{{ s.exam_type }} {{ s.score }}{% if not loop.last %} · {% endif %}{% endfor %}
+          {% else %}
+            <span class="hint">未录入</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="hint">这门课还没有人选（选课功能在 R6 开放）。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<p>
+  <a class="btn btn-ghost" href="{{ back_url }}">返回我的课程</a>
+</p>
+{% endblock %}
+
+{% block footer %}R3 — 角色权限控制（RBAC）· 行级校验（是不是自己教的课）{% endblock %}

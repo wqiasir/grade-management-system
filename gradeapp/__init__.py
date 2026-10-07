@@ -2,6 +2,9 @@
 
 R1 交付物：可运行的 Flask 应用、6 张表的 ORM 定义、Alembic 迁移、``init-db`` / ``seed`` 命令。
 R2 交付物：认证蓝图（``gradeapp/auth.py``）、``base.html`` + 登录页、会话保持。
+R3 交付物：角色权限控制（RBAC）—— ``@role_required``、403 页面、按角色渲染的导航与首页、
+           管理员账号管理（``gradeapp/admin.py``）、只读课程视图（``gradeapp/score.py``）、
+           统计概览（``gradeapp/report.py``）。
 架构参考 Flask 官方教程（Flaskr）的应用工厂与测试夹具写法，业务代码全部自写。
 """
 
@@ -13,7 +16,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import click
-from flask import Flask, current_app, render_template
+from flask import Flask, current_app, g, render_template, url_for
 from flask.cli import with_appcontext
 from flask_migrate import upgrade as alembic_upgrade
 from sqlalchemy import func, inspect
@@ -70,26 +73,40 @@ def create_app(test_config: dict | None = None) -> Flask:
     _register_blueprints(app)
     _register_views(app)
     _register_commands(app)
+    _register_navigation(app)
+    _register_error_handlers(app)
 
     return app
 
 
 def _register_blueprints(app: Flask) -> None:
-    """注册蓝图：R2 只有认证蓝图，后续轮次在此追加 admin / score / report。"""
+    """注册蓝图：R3 起为 auth / admin / score / report，后续轮次在 score、report 内继续补视图。"""
+    from .admin import bp as admin_bp
     from .auth import bp as auth_bp
+    from .report import bp as report_bp
+    from .score import bp as score_bp
 
     app.register_blueprint(auth_bp)
+    app.register_blueprint(admin_bp)
+    app.register_blueprint(score_bp)
+    app.register_blueprint(report_bp)
 
 
 # --------------------------------------------------------------------------- #
 # 视图（R1 只有首页；R2 起由各蓝图接管）
 # --------------------------------------------------------------------------- #
 def _register_views(app: Flask) -> None:
+    from .dashboard import dashboard_context
+    from .decorators import ROLE_LABELS, role_label
     from .models import MODELS
 
     @app.route("/")
     def index():
-        """首页：证明系统已启动，并列出 6 张表的建表与数据情况。"""
+        """首页：证明系统已启动，列出 6 张表的建表与数据情况。
+
+        R3 起顶部再按当前角色渲染一份"我的首页"（管理员看账号总览，
+        教师看自己的课，学生看自己的选课），三种角色看到的首页不同。
+        """
         existing = set(inspect(db.engine).get_table_names())
         tables = []
         for model in MODELS:
@@ -98,12 +115,54 @@ def _register_views(app: Flask) -> None:
             rows = db.session.scalar(db.select(func.count()).select_from(model)) if built else None
             tables.append({"name": name, "built": built, "rows": rows})
 
+        user = g.get("user")
         return render_template(
             "index.html",
             version=__version__,
             tables=tables,
             db_path=db.engine.url.database,
+            role_labels=ROLE_LABELS,
+            current_role_label=role_label(getattr(user, "role", None)),
+            **(dashboard_context(user) if user is not None else {}),
         )
+
+
+# --------------------------------------------------------------------------- #
+# 导航与错误处理（R3）
+# --------------------------------------------------------------------------- #
+def _register_navigation(app: Flask) -> None:
+    """把"按角色渲染的导航"注入所有模板（``base.html`` 里遍历 ``nav_items``）。"""
+    from .menu import menu_for_user
+
+    @app.context_processor
+    def inject_nav() -> dict[str, object]:
+        return {"nav_items": menu_for_user(g.get("user"))}
+
+
+def _register_error_handlers(app: Flask) -> None:
+    """403 / 404 统一走自定义页面。
+
+    403 既覆盖装饰器拦截，也覆盖视图内的行级校验（``decorators.forbidden()``）。
+    ``decorators.forbidden()`` 已经把响应渲染好并带上状态码，
+    Flask 收到"状态码为 403 的响应"不会再次触发这里，所以 403 页面只会渲染一次。
+    """
+    from .decorators import role_label
+
+    @app.errorhandler(403)
+    def handle_forbidden(error):  # pragma: no cover - 由 decorators.forbidden() 正常覆盖
+        return (
+            render_template(
+                "errors/403.html",
+                required_roles=(),
+                message=None,
+                current_role_label=role_label(getattr(g.get("user"), "role", None)),
+            ),
+            403,
+        )
+
+    @app.errorhandler(404)
+    def handle_not_found(error):
+        return render_template("errors/404.html"), 404
 
 
 # --------------------------------------------------------------------------- #

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}403 无权访问 · 学生成绩管理系统{% endblock %}
+
+{% block content %}
+<h1>403 · 无权访问</h1>
+<p class="no">你的角色没有访问该页面或该数据的权限。</p>
+
+<section class="card">
+  <h2>为什么被拒绝</h2>
+  <ul class="plain">
+    <li>当前身份：<strong>{{ current_role_label }}</strong>{% if g.user %}（<code>{{ g.user.username }}</code>）{% endif %}</li>
+    {% if required_roles %}
+      <li>该功能要求的角色：
+        {% for role in required_roles %}
+          <span class="badge">{{ role_labels.get(role, role) }}</span>
+        {% endfor %}
+      </li>
+    {% endif %}
+    {% if message %}
+      <li>{{ message }}</li>
+    {% else %}
+      <li>权限按第 6 节的权限矩阵判定：角色不符、或这条数据不属于你（例如不是自己授课的课程）。</li>
+    {% endif %}
+  </ul>
+  <p class="hint">
+    菜单里看不到的入口并不代表服务端没做校验 —— 这里就是直接敲 URL 的结果：
+    请求被服务端拦下，返回 <code>HTTP 403</code>。
+  </p>
+</section>
+
+<p>
+  <a class="btn btn-primary" href="{{ url_for('index') }}">返回首页</a>
+  {% if not g.user %}
+    <a class="btn btn-ghost" href="{{ url_for('auth.login') }}">去登录</a>
+  {% endif %}
+</p>
+{% endblock %}
+
+{% block footer %}R3 — 角色权限控制（RBAC）· 403{% endblock %}

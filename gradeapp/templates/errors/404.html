@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}404 页面不存在 · 学生成绩管理系统{% endblock %}
+
+{% block content %}
+<h1>404 · 页面或数据不存在</h1>
+<p class="no">找不到你要访问的地址或记录。</p>
+
+<section class="card">
+  <h2>可能的原因</h2>
+  <ul class="plain">
+    <li>地址输错了（例如 <code>/admin/user</code> 少写了 s）。</li>
+    <li>该记录已被删除，或编号不存在。</li>
+    <li>该功能还没实现 —— 尚未开始的轮次在导航里是灰显占位。</li>
+  </ul>
+  <p class="hint">
+    注意：<strong>无权访问</strong>与<strong>不存在</strong>是两种不同的响应 ——
+    前者返回 <code>403</code>（页面上会写清你的角色），后者才是这里的 <code>404</code>。
+  </p>
+</section>
+
+<p><a class="btn btn-primary" href="{{ url_for('index') }}">返回首页</a></p>
+{% endblock %}
+
+{% block footer %}R3 — 角色权限控制（RBAC）· 404{% endblock %}
