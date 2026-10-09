@@ -1,15 +1,15 @@
 """导航菜单：按角色生成，服务端与模板共用一份定义。
 
-对应第 7 节 R3 的交付物"导航栏按角色渲染"。菜单项**按端点是否存在**过滤，
-所以在还没有 ``report`` / 后续蓝图的阶段也不会出现死链：
+对应交付物"导航栏按角色渲染"。菜单项按端点是否存在过滤，
+所以在还没有 report / 后续蓝图的阶段也不会出现死链：
 
     - 始终显示：首页
-    - admin：账号管理（/admin/users）、账号总览（/admin/）
+    - admin：账号管理（/admin/users）、账号总览（/admin/）、学生管理（/admin/students）
     - teacher / student：我的课程（/score/my-courses）
     - admin / teacher / student：统计报表（/report/overview）
 
-> 只靠这里隐藏菜单**不算**权限控制。每个视图上仍有 ``@role_required`` 与行级校验，
-> 直接敲 URL 一样会被 403 挡住（见 ``tests/test_permissions.py``）。
+> 只靠这里隐藏菜单不算权限控制。每个视图上仍有 @role_required 与行级校验，
+> 直接敲 URL 一样会被 403 挡住（见 tests/test_permissions.py）。
 """
 
 from __future__ import annotations
@@ -35,6 +35,12 @@ MENU_ITEMS: tuple[dict[str, Any], ...] = (
         "roles": ("admin",),
     },
     {
+        "key": "students",
+        "label": "学生管理",
+        "endpoint": "admin.student_list",
+        "roles": ("admin",),
+    },
+    {
         "key": "my_courses",
         "label": "我的课程",
         "endpoint": "score.my_courses",
@@ -47,7 +53,6 @@ MENU_ITEMS: tuple[dict[str, Any], ...] = (
         "roles": ("admin", "teacher", "student"),
     },
     # ---- 以下为后续轮次的占位项：没有端点，灰显且不可点击 ----
-    {"key": "students", "label": "学生管理", "endpoint": None, "roles": ("admin",), "pending": "R4"},
     {"key": "teachers", "label": "教师与课程", "endpoint": None, "roles": ("admin",), "pending": "R5"},
     {"key": "enroll", "label": "选课", "endpoint": None, "roles": ("student",), "pending": "R6"},
     {"key": "grade_entry", "label": "成绩录入", "endpoint": None, "roles": ("teacher",), "pending": "R7"},
