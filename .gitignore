@@ -24,6 +24,8 @@ htmlcov/
 
 # --- PPT 验证用渲染产物（PowerPoint 导出的幻灯片 PNG，可随时重新生成）---
 docs/ppt_assets/render_powerpoint/
+docs/ppt_assets/render_r3/
+docs/ppt_assets/render_r3_powerpoint/
 
 # --- 环境变量 ---
 .env
