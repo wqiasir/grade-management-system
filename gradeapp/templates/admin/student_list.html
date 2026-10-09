@@ -1,0 +1,80 @@
+﻿{% extends "base.html" %}
+
+{% block title %}学生管理{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>学生管理</h2>
+    <a href="{{ url_for('admin.student_create') }}" class="btn btn-primary">+ 新增学生</a>
+</div>
+
+<!-- 搜索栏 -->
+<form method="get" class="row g-2 mb-3">
+    <div class="col-auto">
+        <input type="text" name="q" value="{{ keyword }}" class="form-control" placeholder="搜索学号、姓名或班级...">
+    </div>
+    <div class="col-auto">
+        <button type="submit" class="btn btn-secondary">搜索</button>
+    </div>
+</form>
+
+<!-- 学生表格 -->
+<div class="table-responsive">
+    <table class="table table-striped table-hover align-middle">
+        <thead>
+            <tr>
+                <th>学号</th>
+                <th>姓名</th>
+                <th>性别</th>
+                <th>班级</th>
+                <th>入学年份</th>
+                <th>关联账号状态</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for student in students %}
+            <tr>
+                <td><strong>{{ student.sno }}</strong></td>
+                <td>{{ student.name }}</td>
+                <td>{{ student.gender or '—' }}</td>
+                <td>{{ student.class_name or '—' }}</td>
+                <td>{{ student.enroll_year or '—' }}</td>
+                <td>
+                    {% if student.user.is_active %}
+                    <span class="badge bg-success">正常</span>
+                    {% else %}
+                    <span class="badge bg-danger">已停用</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{{ url_for('admin.student_edit', student_id=student.id) }}" class="btn btn-sm btn-outline-primary me-1">编辑</a>
+
+                    <form method="post" action="{{ url_for('admin.student_delete', student_id=student.id) }}" class="d-inline" onsubmit="return confirm('确定要删除学生【{{ student.name }}】及其关联账号吗？此操作不可撤销！');">
+                        {{ action_form.csrf_token }}
+                        <button type="submit" class="btn btn-sm btn-outline-danger">删除</button>
+                    </form>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="7" class="text-center text-muted py-4">暂无学生数据</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- 分页 -->
+{% if pages > 1 %}
+<nav aria-label="Page navigation">
+    <ul class="pagination justify-content-center">
+        {% for p in range(1, pages + 1) %}
+        <li class="page-item {% if p == page %}active{% endif %}">
+            <a class="page-link" href="{{ url_for('admin.student_list', q=keyword, page=p) }}">{{ p }}</a>
+        </li>
+        {% endfor %}
+    </ul>
+</nav>
+{% endif %}
+{% endblock %}
