@@ -11,7 +11,7 @@ from flask.testing import FlaskCliRunner, FlaskClient
 from sqlalchemy import inspect
 from sqlalchemy.exc import IntegrityError
 
-from gradeapp import __version__, create_app
+from gradeapp import SCHOOL_NAME, SYSTEM_NAME, __version__, create_app
 from gradeapp.extensions import db
 from gradeapp.models import MODELS, Course, Enrollment, Score, Student, Teacher, User
 
@@ -37,6 +37,24 @@ def test_index_page_reports_system_started(client: FlaskClient) -> None:
     assert __version__ in html
     for table in EXPECTED_TABLES:
         assert table in html
+
+
+def test_branding_is_the_hdu_cs_system(client: FlaskClient, app: Flask) -> None:
+    """更名后的品牌一致性：系统名 / 学院名只写在配置里，页面里不残留旧名。
+
+    系统原名"学生成绩管理系统"，现定名为"杭电计算机学院学生成绩管理系统"。
+    旧名是系统名的后缀，所以断言"出现次数相等"——只要有一处没带前缀就会失败。
+    """
+    assert app.config["SYSTEM_NAME"] == SYSTEM_NAME
+    assert app.config["SCHOOL_NAME"] == SCHOOL_NAME
+    assert SYSTEM_NAME == "杭电计算机学院学生成绩管理系统"
+    assert SCHOOL_NAME == "杭州电子科技大学计算机学院"
+
+    for path in ("/", "/auth/login"):
+        html = client.get(path).get_data(as_text=True)
+        assert SYSTEM_NAME in html, f"{path} 缺少系统名"
+        assert SCHOOL_NAME in html, f"{path} 缺少学院名"
+        assert html.count("学生成绩管理系统") == html.count(SYSTEM_NAME), f"{path} 残留旧系统名"
 
 
 # --------------------------------------------------------------------------- #

@@ -41,17 +41,22 @@ a { color: var(--accent); }
   font-size: 16px;
   color: var(--fg);
   text-decoration: none;
+  white-space: nowrap;
 }
 
 .nav-links {
   display: flex;
-  gap: 16px;
+  /* 系统名较长时，让菜单项整项换行，而不是把"账号管理"拆成两行 */
+  flex-wrap: wrap;
+  gap: 6px 16px;
   margin: 0;
   padding: 0;
   list-style: none;
   flex: 1;
   font-size: 14px;
 }
+
+.nav-links li { white-space: nowrap; }
 
 .nav-links a { text-decoration: none; }
 .nav-links a:hover { text-decoration: underline; }

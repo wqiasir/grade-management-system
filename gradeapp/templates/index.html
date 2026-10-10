@@ -1,9 +1,10 @@
 {% extends "base.html" %}
 
-{% block title %}首页 · 学生成绩管理系统{% endblock %}
+{% block title %}首页 · {{ system_name }}{% endblock %}
 
 {% block content %}
-<h1>学生成绩管理系统</h1>
+<h1>{{ system_name }}</h1>
+<p class="meta">{{ school_name }}</p>
 <p class="ok">系统已启动</p>
 <p class="meta">
   版本 {{ version }} ·

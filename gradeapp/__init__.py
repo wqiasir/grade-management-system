@@ -1,4 +1,4 @@
-"""学生成绩管理系统 —— 应用工厂。
+"""杭电计算机学院学生成绩管理系统 —— 应用工厂。
 
 R1 交付物：可运行的 Flask 应用、6 张表的 ORM 定义、Alembic 迁移、``init-db`` / ``seed`` 命令。
 R2 交付物：认证蓝图（``gradeapp/auth.py``）、``base.html`` + 登录页、会话保持。
@@ -28,12 +28,20 @@ __version__ = "0.1.0"
 #: 默认数据库文件名（落在 instance/ 下，不入版本控制）
 DEFAULT_DB_FILENAME = "gradeapp.sqlite"
 
+#: 系统品牌信息 —— 界面标题、导航、页脚与文档统一取这里，改名只需改这两个常量。
+#: 系统面向杭州电子科技大学计算机学院的教学场景，业务数据不跨学院。
+SYSTEM_NAME = "杭电计算机学院学生成绩管理系统"
+SCHOOL_NAME = "杭州电子科技大学计算机学院"
+
 
 def create_app(test_config: dict | None = None) -> Flask:
     """应用工厂。测试通过传入 ``test_config`` 拿到互相隔离的临时数据库。"""
     app = Flask(__name__, instance_relative_config=True)
 
     app.config.from_mapping(
+        # 系统品牌信息：模板里以 system_name / school_name 直接使用（见 _register_branding）
+        SYSTEM_NAME=SYSTEM_NAME,
+        SCHOOL_NAME=SCHOOL_NAME,
         # 不在代码里硬编码密钥：开发用 .flaskenv，生产用环境变量
         SECRET_KEY=os.environ.get("SECRET_KEY"),
         SQLALCHEMY_DATABASE_URI="sqlite:///"
@@ -74,6 +82,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     _register_views(app)
     _register_commands(app)
     _register_navigation(app)
+    _register_branding(app)
     _register_error_handlers(app)
 
     return app
@@ -137,6 +146,20 @@ def _register_navigation(app: Flask) -> None:
     @app.context_processor
     def inject_nav() -> dict[str, object]:
         return {"nav_items": menu_for_user(g.get("user"))}
+
+
+def _register_branding(app: Flask) -> None:
+    """把系统名与学院名注入所有模板（模板里用 ``system_name`` / ``school_name``）。
+
+    品牌信息只在配置里写一份：改系统名不用逐个模板改，也不会漏掉某张页面。
+    """
+
+    @app.context_processor
+    def inject_branding() -> dict[str, str]:
+        return {
+            "system_name": app.config["SYSTEM_NAME"],
+            "school_name": app.config["SCHOOL_NAME"],
+        }
 
 
 def _register_error_handlers(app: Flask) -> None:

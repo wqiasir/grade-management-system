@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}学生成绩管理系统{% endblock %}</title>
+  <title>{% block title %}{{ system_name }}{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
   <nav class="topnav">
     <div class="nav-inner">
-      <a class="brand" href="{{ url_for('index') }}">学生成绩管理系统</a>
+      <a class="brand" href="{{ url_for('index') }}">{{ system_name }}</a>
 
       <ul class="nav-links">
         {# 导航项由 gradeapp/menu.py 按角色生成；未实现的轮次为灰显占位（无链接） #}
@@ -53,7 +53,9 @@
     {% block content %}{% endblock %}
 
     <footer>
-      {% block footer %}学生成绩管理系统 · 软件工程课程实践{% endblock %}
+      {# 学院名固定在外层，子页面覆写 footer 块时也不会丢掉品牌信息 #}
+      <span class="meta">{{ school_name }}</span> ·
+      {% block footer %}{{ system_name }} · 软件工程课程实践{% endblock %}
     </footer>
   </main>
 </body>

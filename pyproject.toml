@@ -1,7 +1,7 @@
 [project]
 name = "gradeapp"
 version = "0.1.0"
-description = "学生成绩管理系统（软件工程课程实践）"
+description = "杭电计算机学院学生成绩管理系统（软件工程课程实践）"
 requires-python = ">=3.12"
 dependencies = [
     "Flask>=3.1,<3.2",
