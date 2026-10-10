@@ -3,64 +3,57 @@
 {% block title %}{{ title }} · {{ system_name }}{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-6">
-        <div class="card shadow-sm">
-            <div class="card-header bg-white">
-                <h4 class="card-title mb-0">{{ title }}</h4>
-            </div>
-            <div class="card-body">
-                <form method="post">
-                    {{ form.csrf_token }}
+<h1>{{ title }}</h1>
 
-                    <div class="mb-3">
-                        <label class="form-label">学号 <span class="text-danger">*</span></label>
-                        {{ form.sno(class="form-control" + (" is-invalid" if form.sno.errors else "")) }}
-                        {% for error in form.sno.errors %}
-                        <div class="invalid-feedback">{{ error }}</div>
-                        {% endfor %}
-                    </div>
+<section class="card">
+    <form method="post">
+        {{ form.csrf_token }}
 
-                    <div class="mb-3">
-                        <label class="form-label">姓名 <span class="text-danger">*</span></label>
-                        {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else "")) }}
-                        {% for error in form.name.errors %}
-                        <div class="invalid-feedback">{{ error }}</div>
-                        {% endfor %}
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">性别</label>
-                        {{ form.gender(class="form-select") }}
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">班级</label>
-                        {{ form.class_name(class="form-control") }}
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">入学年份</label>
-                        {{ form.enroll_year(class="form-control", type="number", placeholder="例如：2023") }}
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">
-                            {% if student %}修改密码（不填则保持不变）{% else %}初始密码（不填则默认为 123456）{% endif %}
-                        </label>
-                        {{ form.password(class="form-control" + (" is-invalid" if form.password.errors else ""), type="password") }}
-                        {% for error in form.password.errors %}
-                        <div class="invalid-feedback">{{ error }}</div>
-                        {% endfor %}
-                    </div>
-
-                    <div class="d-flex justify-content-between">
-                        <a href="{{ url_for('admin.student_list') }}" class="btn btn-outline-secondary">返回列表</a>
-                        <button type="submit" class="btn btn-primary">保存</button>
-                    </div>
-                </form>
-            </div>
+        <div style="margin-bottom: 1rem;">
+            <label for="sno" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">学号 <span style="color: #dc3545;">*</span></label>
+            {{ form.sno(class="input" + (" is-invalid" if form.sno.errors else "")) }}
+            {% for error in form.sno.errors %}
+            <div class="hint" style="color: #dc3545; margin-top: 0.25rem;">{{ error }}</div>
+            {% endfor %}
         </div>
-    </div>
-</div>
+
+        <div style="margin-bottom: 1rem;">
+            <label for="name" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">姓名 <span style="color: #dc3545;">*</span></label>
+            {{ form.name(class="input" + (" is-invalid" if form.name.errors else "")) }}
+            {% for error in form.name.errors %}
+            <div class="hint" style="color: #dc3545; margin-top: 0.25rem;">{{ error }}</div>
+            {% endfor %}
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+            <label for="gender" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">性别</label>
+            {{ form.gender(class="input") }}
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+            <label for="class_name" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">班级</label>
+            {{ form.class_name(class="input") }}
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+            <label for="enroll_year" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">入学年份</label>
+            {{ form.enroll_year(class="input", type="number", placeholder="例如：2023") }}
+        </div>
+
+        <div style="margin-bottom: 1.5rem;">
+            <label for="password" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
+                {% if student %}修改密码（不填则保持不变）{% else %}初始密码（不填则默认为 123456）{% endif %}
+            </label>
+            {{ form.password(class="input" + (" is-invalid" if form.password.errors else ""), type="password") }}
+            {% for error in form.password.errors %}
+            <div class="hint" style="color: #dc3545; margin-top: 0.25rem;">{{ error }}</div>
+            {% endfor %}
+        </div>
+
+        <div style="display: flex; gap: 1rem; align-items: center;">
+            <button type="submit" class="btn btn-primary">保存</button>
+            <a href="{{ url_for('admin.student_list') }}" class="btn btn-ghost">返回列表</a>
+        </div>
+    </form>
+</section>
 {% endblock %}

@@ -20,6 +20,7 @@ from wtforms import IntegerField, PasswordField, SelectField, StringField
 from wtforms.validators import DataRequired, Length, Optional, Regexp
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
+from datetime import datetime
 
 from .decorators import ROLE_LABELS, login_required, role_label, role_required
 from .extensions import db
@@ -60,7 +61,7 @@ class StudentForm(FlaskForm):
         default="",
     )
     class_name = StringField("班级", validators=[Optional(), Length(max=64)])
-    enroll_year = IntegerField("入学年份", validators=[Optional()])
+    enroll_year = IntegerField("入学年份", validators=[Optional()],default=datetime.now().year)
     password = PasswordField(
         "初始密码",
         validators=[
