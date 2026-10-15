@@ -126,6 +126,14 @@ ROUTES: tuple[tuple[str, str, frozenset[str]], ...] = (
     # 第 6 节「用户账号管理」：仅 admin
     ("账号管理-列表", "/admin/users", frozenset({"admin"})),
     ("账号总览", "/admin/", frozenset({"admin"})),
+    # 第 6 节「学生信息」管理页（R4）：仅 admin
+    ("学生管理-列表", "/admin/students", frozenset({"admin"})),
+    ("学生管理-新增页", "/admin/students/create", frozenset({"admin"})),
+    # 第 6 节「教师信息」「课程信息」管理页（R5）：仅 admin
+    ("教师管理-列表", "/admin/teachers", frozenset({"admin"})),
+    ("教师管理-新增页", "/admin/teachers/create", frozenset({"admin"})),
+    ("课程管理-列表", "/admin/courses", frozenset({"admin"})),
+    ("课程管理-新增页", "/admin/courses/create", frozenset({"admin"})),
     # 第 6 节「课程信息」「统计报表」：三种角色都能进，但范围不同（范围由各自测试覆盖）
     ("我的课程", "/score/my-courses", frozenset({"admin", "teacher", "student"})),
     ("统计报表", "/report/overview", frozenset({"admin", "teacher", "student"})),
