@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} · {{ system_name }}{% endblock %}
+
+{% block content %}
+<h1>{{ title }}</h1>
+
+<section class="card">
+    <form method="post">
+        {{ form.csrf_token }}
+
+        <div style="margin-bottom: 1rem;">
+            <label for="tno" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">工号 <span style="color: #dc3545;">*</span></label>
+            {{ form.tno(class="input" + (" is-invalid" if form.tno.errors else "")) }}
+            {% for error in form.tno.errors %}
+            <div class="hint" style="color: #dc3545; margin-top: 0.25rem;">{{ error }}</div>
+            {% endfor %}
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+            <label for="name" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">姓名 <span style="color: #dc3545;">*</span></label>
+            {{ form.name(class="input" + (" is-invalid" if form.name.errors else "")) }}
+            {% for error in form.name.errors %}
+            <div class="hint" style="color: #dc3545; margin-top: 0.25rem;">{{ error }}</div>
+            {% endfor %}
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+            <label for="title" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">职称</label>
+            {{ form.title(class="input") }}
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+            <label for="department" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">所在学院</label>
+            {{ form.department(class="input") }}
+        </div>
+
+        <div style="margin-bottom: 1.5rem;">
+            <label for="password" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
+                {% if teacher %}修改密码（不填则保持不变）{% else %}初始密码（不填则默认为 123456）{% endif %}
+            </label>
+            {{ form.password(class="input" + (" is-invalid" if form.password.errors else ""), type="password") }}
+            {% for error in form.password.errors %}
+            <div class="hint" style="color: #dc3545; margin-top: 0.25rem;">{{ error }}</div>
+            {% endfor %}
+        </div>
+
+        <div style="display: flex; gap: 1rem; align-items: center;">
+            <button type="submit" class="btn btn-primary">保存</button>
+            <a href="{{ url_for('admin.teacher_list') }}" class="btn btn-ghost">返回列表</a>
+        </div>
+    </form>
+</section>
+{% endblock %}

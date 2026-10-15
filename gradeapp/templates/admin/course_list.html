@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}课程管理 · {{ system_name }}{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+    <h1>课程管理</h1>
+    <a href="{{ url_for('admin.course_create') }}" class="btn btn-primary">+ 新增课程</a>
+</div>
+
+<p class="meta">
+    共 <strong>{{ courses|length if courses is defined else '?' }}</strong> 门课程
+    {% if keyword %} · 关键词：<code>{{ keyword }}</code>{% endif %}
+</p>
+
+<form class="filter-bar" method="get" action="{{ url_for('admin.course_list') }}">
+    <label for="q">搜索</label>
+    <input class="input input-inline" id="q" name="q" type="search" value="{{ keyword }}" placeholder="搜索课程代码、名称或学期...">
+    <button class="btn btn-primary" type="submit">搜索</button>
+    <a class="btn btn-ghost" href="{{ url_for('admin.course_list') }}">重置</a>
+</form>
+
+<table class="grid">
+    <thead>
+        <tr>
+            <th>课程代码</th>
+            <th>课程名称</th>
+            <th>学分 / 学时</th>
+            <th>开课学期</th>
+            <th>授课教师</th>
+            <th>已选 / 容量</th>
+            <th>操作</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for course in courses %}
+        <tr>
+            <td><strong>{{ course.code }}</strong></td>
+            <td>{{ course.name }}</td>
+            <td>{{ course.credit }} / {{ course.hours }}</td>
+            <td>{{ course.semester }}</td>
+            <td>{{ course.teacher.name ~ '（' ~ course.teacher.tno ~ '）' if course.teacher else '未排课' }}</td>
+            <td>{{ course.enrollments|length }} / {{ course.capacity }}</td>
+            <td>
+                <a class="btn btn-ghost" href="{{ url_for('admin.course_edit', course_id=course.id) }}">编辑</a>
+                <form class="inline" method="post" action="{{ url_for('admin.course_delete', course_id=course.id) }}" onsubmit="return confirm('确定要删除课程【{{ course.name }}】吗？{% if course.enrollments %}该课程已有 {{ course.enrollments|length }} 条选课记录，删除后其成绩也将一并删除！{% endif %}此操作不可撤销！');" style="display:inline;">
+                    {{ action_form.csrf_token }}
+                    <button class="btn btn-ghost" type="submit" style="color: #dc3545;">删除</button>
+                </form>
+            </td>
+        </tr>
+        {% else %}
+        <tr>
+            <td colspan="7" class="hint">没有符合条件的课程。</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% if pages > 1 %}
+<nav class="pager">
+    {% if page > 1 %}
+    <a href="{{ url_for('admin.course_list', q=keyword or None, page=page - 1) }}">上一页</a>
+    {% endif %}
+    <span>第 {{ page }} / {{ pages }} 页</span>
+    {% if page < pages %}
+    <a href="{{ url_for('admin.course_list', q=keyword or None, page=page + 1) }}">下一页</a>
+    {% endif %}
+</nav>
+{% endif %}
+{% endblock %}
