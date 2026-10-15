@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} · {{ system_name }}{% endblock %}
+
+{% block content %}
+<h1>{{ title }}</h1>
+
+<section class="card">
+    <form method="post">
+        {{ form.csrf_token }}
+
+        <div style="margin-bottom: 1rem;">
+            <label for="code" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">课程代码 <span style="color: #dc3545;">*</span></label>
+            {{ form.code(class="input" + (" is-invalid" if form.code.errors else "")) }}
+            {% for error in form.code.errors %}
+            <div class="hint" style="color: #dc3545; margin-top: 0.25rem;">{{ error }}</div>
+            {% endfor %}
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+            <label for="name" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">课程名称 <span style="color: #dc3545;">*</span></label>
+            {{ form.name(class="input" + (" is-invalid" if form.name.errors else "")) }}
+            {% for error in form.name.errors %}
+            <div class="hint" style="color: #dc3545; margin-top: 0.25rem;">{{ error }}</div>
+            {% endfor %}
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+            <label for="credit" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">学分 <span style="color: #dc3545;">*</span></label>
+            {{ form.credit(class="input" + (" is-invalid" if form.credit.errors else ""), type="number", step="0.5", min="0.5", max="20", placeholder="例如：3.0") }}
+            {% for error in form.credit.errors %}
+            <div class="hint" style="color: #dc3545; margin-top: 0.25rem;">{{ error }}</div>
+            {% endfor %}
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+            <label for="hours" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">学时 <span style="color: #dc3545;">*</span></label>
+            {{ form.hours(class="input" + (" is-invalid" if form.hours.errors else ""), type="number", min="1", max="999", placeholder="例如：48") }}
+            {% for error in form.hours.errors %}
+            <div class="hint" style="color: #dc3545; margin-top: 0.25rem;">{{ error }}</div>
+            {% endfor %}
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+            <label for="semester" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">开课学期 <span style="color: #dc3545;">*</span></label>
+            {{ form.semester(class="input" + (" is-invalid" if form.semester.errors else ""), placeholder="例如：2025-2026-1") }}
+            {% for error in form.semester.errors %}
+            <div class="hint" style="color: #dc3545; margin-top: 0.25rem;">{{ error }}</div>
+            {% endfor %}
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+            <label for="teacher_id" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">授课教师</label>
+            {{ form.teacher_id(class="input") }}
+            {% for error in form.teacher_id.errors %}
+            <div class="hint" style="color: #dc3545; margin-top: 0.25rem;">{{ error }}</div>
+            {% endfor %}
+        </div>
+
+        <div style="margin-bottom: 1.5rem;">
+            <label for="capacity" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">容量 <span style="color: #dc3545;">*</span></label>
+            {{ form.capacity(class="input" + (" is-invalid" if form.capacity.errors else ""), type="number", min="0", max="10000", placeholder="例如：60") }}
+            {% for error in form.capacity.errors %}
+            <div class="hint" style="color: #dc3545; margin-top: 0.25rem;">{{ error }}</div>
+            {% endfor %}
+        </div>
+
+        <div style="display: flex; gap: 1rem; align-items: center;">
+            <button type="submit" class="btn btn-primary">保存</button>
+            <a href="{{ url_for('admin.course_list') }}" class="btn btn-ghost">返回列表</a>
+        </div>
+    </form>
+</section>
+{% endblock %}

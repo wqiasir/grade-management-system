@@ -5,6 +5,9 @@ R2 交付物：认证蓝图（``gradeapp/auth.py``）、``base.html`` + 登录�
 R3 交付物：角色权限控制（RBAC）—— ``@role_required``、403 页面、按角色渲染的导航与首页、
            管理员账号管理（``gradeapp/admin.py``）、只读课程视图（``gradeapp/score.py``）、
            统计概览（``gradeapp/report.py``）。
+R4 交付物：学生信息管理 —— ``/admin/students`` 网页增删改查，自动建立关联登录账号。
+R5 交付物：教师与课程管理 —— ``/admin/teachers``、``/admin/courses`` 网页增删改查；
+           业务规则：仍授课的教师禁止删除、课程容量不得小于已选人数、删除课程级联选课与成绩。
 架构参考 Flask 官方教程（Flaskr）的应用工厂与测试夹具写法，业务代码全部自写。
 """
 

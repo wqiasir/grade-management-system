@@ -4,7 +4,8 @@
 所以在还没有 report / 后续蓝图的阶段也不会出现死链：
 
     - 始终显示：首页
-    - admin：账号管理（/admin/users）、账号总览（/admin/）、学生管理（/admin/students）
+    - admin：账号管理（/admin/users）、账号总览（/admin/）、学生管理（/admin/students）、
+      教师管理（/admin/teachers）、课程管理（/admin/courses）
     - teacher / student：我的课程（/score/my-courses）
     - admin / teacher / student：统计报表（/report/overview）
 
@@ -41,6 +42,18 @@ MENU_ITEMS: tuple[dict[str, Any], ...] = (
         "roles": ("admin",),
     },
     {
+        "key": "teachers",
+        "label": "教师管理",
+        "endpoint": "admin.teacher_list",
+        "roles": ("admin",),
+    },
+    {
+        "key": "courses",
+        "label": "课程管理",
+        "endpoint": "admin.course_list",
+        "roles": ("admin",),
+    },
+    {
         "key": "my_courses",
         "label": "我的课程",
         "endpoint": "score.my_courses",
@@ -53,7 +66,6 @@ MENU_ITEMS: tuple[dict[str, Any], ...] = (
         "roles": ("admin", "teacher", "student"),
     },
     # ---- 以下为后续轮次的占位项：没有端点，灰显且不可点击 ----
-    {"key": "teachers", "label": "教师与课程", "endpoint": None, "roles": ("admin",), "pending": "R5"},
     {"key": "enroll", "label": "选课", "endpoint": None, "roles": ("student",), "pending": "R6"},
     {"key": "grade_entry", "label": "成绩录入", "endpoint": None, "roles": ("teacher",), "pending": "R7"},
     {"key": "my_scores", "label": "我的成绩", "endpoint": None, "roles": ("student",), "pending": "R8"},
