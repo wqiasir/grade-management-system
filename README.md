@@ -444,7 +444,7 @@ project/
     ├── smoke_r2.py                ← R2 端到端冒烟脚本
     ├── smoke_r3.py                ← R3 端到端冒烟脚本（角色权限，32 项断言）
     ├── ppt_anim_notes.md          ← PPT 出场动画实现与踩坑记录
-    └── ppt_assets/                ← 汇报 PPT 的素材与生成脚本（成品归档在工作目录根的 PPT/ 下）
+    └── ppt_assets/                ← 历史轮次的 PPT 生成脚本（仅 R1/R2 入库；R3 起每轮的截图与脚本用完即弃，成品归档在工作目录根的 PPT/ 下，见 PPT说明.md）
 ```
 
 ### 尚未创建（后续轮次产出）

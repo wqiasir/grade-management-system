@@ -27,6 +27,18 @@ docs/ppt_assets/render_powerpoint/
 docs/ppt_assets/render_r3/
 docs/ppt_assets/render_r3_powerpoint/
 
+# --- PPT 素材与脚本（R3 及以后各轮）：一轮用完即弃，成品已归档在 PPT/ 下 ---
+# 每一轮的截图、裁剪派生产物与生成脚本都只服务于那一轮 PPT：
+#   * 原始截图 r3_*.png、裁剪派生的 out_r3/  —— 成品 pptx 里已含这些图片；
+#   * 生成/校验脚本 *_r3.py              —— 只是当轮的工具，可随时重写，
+#     且仓库内没有任何文档或代码引用它们（已用 git grep 确认）。
+# 因此这些都不入版本控制，仓库只留成品 pptx（PPT/ 下）。
+# 注：更早的 R1/R2 素材与脚本（01~07_*.png、out/、build_ppt.py 等）是在
+#     本约定之前入库的，为不影响已推送的历史，保持已跟踪状态不动。
+docs/ppt_assets/r3_*.png
+docs/ppt_assets/out_r3/
+docs/ppt_assets/*_r3.py
+
 # --- 环境变量 ---
 .env
 
