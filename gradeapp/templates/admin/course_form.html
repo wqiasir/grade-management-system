@@ -63,6 +63,7 @@
             {% for error in form.capacity.errors %}
             <div class="hint" style="color: #dc3545; margin-top: 0.25rem;">{{ error }}</div>
             {% endfor %}
+            <div class="hint" style="margin-top: 0.25rem;">填 0 表示不限容量；正数表示最多可选的人数。</div>
         </div>
 
         <div style="display: flex; gap: 1rem; align-items: center;">

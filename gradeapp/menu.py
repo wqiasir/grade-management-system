@@ -5,8 +5,9 @@
 
     - 始终显示：首页
     - admin：账号管理（/admin/users）、账号总览（/admin/）、学生管理（/admin/students）、
-      教师管理（/admin/teachers）、课程管理（/admin/courses）
-    - teacher / student：我的课程（/score/my-courses）
+      教师管理（/admin/teachers）、课程管理（/admin/courses）、选课名单（/score/my-courses）
+    - student：选课（/score/enroll）、我的课程（/score/my-courses）
+    - teacher：我的课程（/score/my-courses）
     - admin / teacher / student：统计报表（/report/overview）
 
 > 只靠这里隐藏菜单不算权限控制。每个视图上仍有 @role_required 与行级校验，
@@ -54,6 +55,18 @@ MENU_ITEMS: tuple[dict[str, Any], ...] = (
         "roles": ("admin",),
     },
     {
+        "key": "rosters",
+        "label": "选课名单",
+        "endpoint": "score.my_courses",
+        "roles": ("admin",),
+    },
+    {
+        "key": "enroll",
+        "label": "选课",
+        "endpoint": "score.enroll_courses",
+        "roles": ("student",),
+    },
+    {
         "key": "my_courses",
         "label": "我的课程",
         "endpoint": "score.my_courses",
@@ -66,7 +79,6 @@ MENU_ITEMS: tuple[dict[str, Any], ...] = (
         "roles": ("admin", "teacher", "student"),
     },
     # ---- 以下为后续轮次的占位项：没有端点，灰显且不可点击 ----
-    {"key": "enroll", "label": "选课", "endpoint": None, "roles": ("student",), "pending": "R6"},
     {"key": "grade_entry", "label": "成绩录入", "endpoint": None, "roles": ("teacher",), "pending": "R7"},
     {"key": "my_scores", "label": "我的成绩", "endpoint": None, "roles": ("student",), "pending": "R8"},
     {"key": "excel", "label": "Excel 导入导出", "endpoint": None, "roles": ("admin",), "pending": "R10"},

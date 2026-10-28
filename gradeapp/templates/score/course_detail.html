@@ -8,16 +8,48 @@
   <code>{{ course.code }}</code> ·
   学期 {{ course.semester }} ·
   {{ course.credit }} 学分 / {{ course.hours }} 学时 ·
-  容量 {{ course.capacity }} ·
+  已选 {{ enrolled_count }} / {% if course.capacity > 0 %}{{ course.capacity }}{% else %}不限{% endif %}
+  {% if remaining is not none %}（余 {{ remaining }}）{% endif %} ·
   授课教师 {{ course.teacher.name if course.teacher else '待安排' }}
 </p>
-<p class="meta">当前身份：{{ role_label }} · 本页为<strong>只读</strong>视图</p>
+<p class="meta">
+  当前身份：{{ role_label }} ·
+  {% if g.user.role == 'admin' %}
+    你可以把学生加入课程或移出课程；<strong>已出成绩的记录不能移出</strong>。
+  {% elif g.user.role == 'teacher' %}
+    名单为<strong>只读</strong>视图（教师不能选课 / 退课）。
+  {% else %}
+    你可以退选自己的记录；<strong>已出成绩的课程不能退课</strong>。
+  {% endif %}
+</p>
+
+{% if add_form %}
+<section class="card">
+  <h2>添加学生</h2>
+  {% if add_form.student_id.choices | length > 1 %}
+    <form method="post" action="{{ url_for('score.roster_add', course_id=course.id) }}">
+      {{ add_form.hidden_tag() }}
+      <div class="filter-bar" style="margin: 0;">
+        <label for="student_id">学生</label>
+        {{ add_form.student_id(class="input input-inline") }}
+        <button class="btn btn-primary" type="submit">加入课程</button>
+      </div>
+      <p class="hint">下拉框只列出还没有选这门课的学生。容量已满时会拒绝加入。</p>
+    </form>
+  {% else %}
+    <p class="hint">所有学生都已在这门课的名单里。</p>
+  {% endif %}
+</section>
+{% endif %}
 
 <section class="card">
   <h2>选课名单（{{ enrollments | length }} 人）</h2>
   <table class="grid">
     <thead>
-      <tr><th>#</th><th>学号</th><th>姓名</th><th>班级</th><th>已录成绩</th></tr>
+      <tr>
+        <th>#</th><th>学号</th><th>姓名</th><th>班级</th><th>选课时间</th><th>已录成绩</th>
+        {% if g.user.role in ('admin', 'student') %}<th>操作</th>{% endif %}
+      </tr>
     </thead>
     <tbody>
       {% for e in enrollments %}
@@ -26,6 +58,7 @@
         <td><code>{{ e.student.sno if e.student else '—' }}</code></td>
         <td>{{ e.student.name if e.student else '—' }}</td>
         <td>{{ e.student.class_name if e.student else '—' }}</td>
+        <td class="hint">{{ e.enrolled_at.strftime('%Y-%m-%d %H:%M') if e.enrolled_at else '—' }}</td>
         <td>
           {% set items = score_map.get(e.id, []) %}
           {% if items %}
@@ -34,9 +67,31 @@
             <span class="hint">未录入</span>
           {% endif %}
         </td>
+        {% if g.user.role in ('admin', 'student') %}
+        <td>
+          {% set can_drop = (g.user.role == 'admin') or (e.id == my_enrollment_id) %}
+          {% if can_drop %}
+            {% if items %}
+              <span class="hint">已有成绩，不可退课</span>
+            {% else %}
+              <form class="inline" method="post"
+                    action="{{ url_for('score.drop_enrollment', enrollment_id=e.id) }}"
+                    onsubmit="return confirm('确定把【{{ e.student.name if e.student else '该学生' }}】从课程【{{ course.name }}】中移出吗？');">
+                {{ action_form.csrf_token }}
+                <input type="hidden" name="next" value="{{ url_for('score.course_detail', course_id=course.id) }}">
+                <button class="btn btn-ghost" type="submit">
+                  {% if g.user.role == 'admin' %}移出课程{% else %}退课{% endif %}
+                </button>
+              </form>
+            {% endif %}
+          {% else %}
+            <span class="hint">—</span>
+          {% endif %}
+        </td>
+        {% endif %}
       </tr>
       {% else %}
-      <tr><td colspan="5" class="hint">这门课还没有人选（选课功能在 R6 开放）。</td></tr>
+      <tr><td colspan="{{ 7 if g.user.role in ('admin', 'student') else 6 }}" class="hint">这门课还没有人选。</td></tr>
       {% endfor %}
     </tbody>
   </table>
@@ -47,4 +102,4 @@
 </p>
 {% endblock %}
 
-{% block footer %}R3 — 角色权限控制（RBAC）· 行级校验（是不是自己教的课）{% endblock %}
+{% block footer %}R6 — 选课管理 · 选课名单（管理员可维护 / 教师只读 / 学生仅退自己）{% endblock %}

@@ -136,6 +136,9 @@ ROUTES: tuple[tuple[str, str, frozenset[str]], ...] = (
     ("课程管理-新增页", "/admin/courses/create", frozenset({"admin"})),
     # 第 6 节「课程信息」「统计报表」：三种角色都能进，但范围不同（范围由各自测试覆盖）
     ("我的课程", "/score/my-courses", frozenset({"admin", "teacher", "student"})),
+    # 第 6 节「选课 / 退课」：学生自主选课页；管理员/教师没有"给自己选课"的场景
+    # （管理员的代选入口在课程名单页内，属于写操作，见 tests/test_score.py）
+    ("选课页", "/score/enroll", frozenset({"student"})),
     ("统计报表", "/report/overview", frozenset({"admin", "teacher", "student"})),
 )
 

@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}选课 · {{ system_name }}{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 10px;">
+  <h1 style="margin: 0;">选课</h1>
+  <a class="btn btn-ghost" href="{{ url_for('score.my_courses') }}">我的课程（已选 {{ selected_count }} 门）</a>
+</div>
+
+<p class="meta">
+  当前身份：<span class="badge">学生</span> ·
+  已选 <strong>{{ selected_count }}</strong> 门 ·
+  同一门课不能重复选；容量为 <code>0</code> 的课程表示<strong>不限容量</strong>。
+</p>
+
+{% if not student %}
+  <section class="card">
+    <p class="flash flash-error">当前账号没有关联的学生档案，无法选课，请联系管理员。</p>
+  </section>
+{% else %}
+<form class="filter-bar" method="get" action="{{ url_for('score.enroll_courses') }}">
+  <label for="q">搜索</label>
+  <input class="input input-inline" id="q" name="q" type="search" value="{{ keyword }}"
+         placeholder="课程代码或名称...">
+  <label for="semester">学期</label>
+  <select class="input input-inline" id="semester" name="semester">
+    <option value="">全部学期</option>
+    {% for item in semesters %}
+      <option value="{{ item }}" {% if item == semester %}selected{% endif %}>{{ item }}</option>
+    {% endfor %}
+  </select>
+  <button class="btn btn-primary" type="submit">筛选</button>
+  <a class="btn btn-ghost" href="{{ url_for('score.enroll_courses') }}">重置</a>
+</form>
+
+<section class="card">
+  <h2>可选课程（{{ rows | length }} 门）</h2>
+  <table class="grid">
+    <thead>
+      <tr>
+        <th>课程代码</th><th>课程名称</th><th>授课教师</th><th>学期</th>
+        <th>学分 / 学时</th><th>已选 / 容量</th><th>状态</th><th>操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td><code>{{ row.course.code }}</code></td>
+        <td>{{ row.course.name }}</td>
+        <td>{{ row.course.teacher.name if row.course.teacher else '待安排' }}</td>
+        <td>{{ row.course.semester }}</td>
+        <td>{{ row.course.credit }} / {{ row.course.hours }}</td>
+        <td>
+          {{ row.enrolled }} / {% if row.course.capacity > 0 %}{{ row.course.capacity }}{% else %}不限{% endif %}
+          {% if row.remaining is not none %}
+            <span class="hint">（余 {{ row.remaining }}）</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if row.my_enrollment %}
+            <span class="yes">已选</span>
+          {% elif row.is_full %}
+            <span class="no">已满</span>
+          {% else %}
+            <span class="hint">可选</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if row.my_enrollment %}
+            <form class="inline" method="post"
+                  action="{{ url_for('score.drop_enrollment', enrollment_id=row.my_enrollment.id) }}"
+                  onsubmit="return confirm('确定退选【{{ row.course.name }}】吗？');">
+              {{ action_form.csrf_token }}
+              <input type="hidden" name="next" value="{{ url_for('score.enroll_courses') }}">
+              <button class="btn btn-ghost" type="submit">退课</button>
+            </form>
+          {% elif row.is_full %}
+            <span class="hint">名额已满</span>
+          {% else %}
+            <form class="inline" method="post" action="{{ url_for('score.enroll', course_id=row.course.id) }}">
+              {{ action_form.csrf_token }}
+              <input type="hidden" name="next" value="{{ url_for('score.enroll_courses') }}">
+              <button class="btn btn-primary" type="submit">选课</button>
+            </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="8" class="hint">没有符合条件的课程。请调整搜索关键词或学期筛选。</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+<p class="hint">
+  选课成功后会出现在「我的课程」中；已出成绩的课程不允许退课。
+  如果页面上的名额状态已过期（例如刚被其他同学选满），提交时服务端会再次校验并提示。
+</p>
+{% endblock %}
+
+{% block footer %}R6 — 选课管理 · 可选课程 / 选课 / 退课{% endblock %}

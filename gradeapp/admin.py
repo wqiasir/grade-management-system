@@ -25,7 +25,7 @@ from typing import Any
 from flask import Blueprint, abort, flash, g, redirect, render_template, request, url_for
 from flask_wtf import FlaskForm
 from wtforms import FloatField, IntegerField, PasswordField, SelectField, StringField
-from wtforms.validators import DataRequired, Length, NumberRange, Optional, Regexp
+from wtforms.validators import DataRequired, InputRequired, Length, NumberRange, Optional, Regexp
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 from datetime import datetime
@@ -152,7 +152,9 @@ class CourseForm(FlaskForm):
     capacity = IntegerField(
         "容量",
         validators=[
-            DataRequired(message="容量不能为空"),
+            # 用 InputRequired 而不是 DataRequired：DataRequired 把整数 0 当成空值，
+            # 而 R6 的容量口径里 0 表示"不限容量"，必须允许提交。
+            InputRequired(message="容量不能为空"),
             NumberRange(min=0, max=10000, message="容量需在 0 ~ 10000 之间"),
         ],
     )
@@ -728,7 +730,9 @@ def course_edit(course_id: int):
                 )
 
         enrolled = len(course.enrollments)
-        if form.capacity.data < enrolled:
+        # 容量 0 在 R6 口径里表示"不限容量"，因此不参与"不得小于已选人数"的比较；
+        # 只有正数容量才需要保证 >= 当前已选人数。
+        if form.capacity.data > 0 and form.capacity.data < enrolled:
             flash(f"容量不能小于当前已选人数（{enrolled} 人）！", "error")
             return render_template(
                 "admin/course_form.html", form=form, title="编辑课程", course=course

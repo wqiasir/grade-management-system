@@ -40,7 +40,13 @@
             <td>{{ course.credit }} / {{ course.hours }}</td>
             <td>{{ course.semester }}</td>
             <td>{{ course.teacher.name ~ '（' ~ course.teacher.tno ~ '）' if course.teacher else '未排课' }}</td>
-            <td>{{ course.enrollments|length }} / {{ course.capacity }}</td>
+            <td>
+                {% if course.capacity > 0 %}
+                    {{ course.enrollments|length }} / {{ course.capacity }}
+                {% else %}
+                    {{ course.enrollments|length }} / 不限
+                {% endif %}
+            </td>
             <td>
                 <a class="btn btn-ghost" href="{{ url_for('admin.course_edit', course_id=course.id) }}">编辑</a>
                 <form class="inline" method="post" action="{{ url_for('admin.course_delete', course_id=course.id) }}" onsubmit="return confirm('确定要删除课程【{{ course.name }}】吗？{% if course.enrollments %}该课程已有 {{ course.enrollments|length }} 条选课记录，删除后其成绩也将一并删除！{% endif %}此操作不可撤销！');" style="display:inline;">
