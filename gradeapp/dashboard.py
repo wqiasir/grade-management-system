@@ -1,22 +1,7 @@
-"""按角色准备首页数据。
-
-R3 交付物"三种角色各自的首页"：同一个 ``/`` 地址，登录角色不同，
-首页顶部展示的内容不同：
-
-| 角色 | 首页展示 |
-| --- | --- |
-| 未登录 | 系统状态 + 登录入口 |
-| admin | 账号数 / 学生 / 教师 / 课程 / 选课 / 成绩总览 + 最近账号 |
-| teacher | 我的授课课程 + 选课人数 + 已录成绩条数 |
-| student | 我的选课列表 + 已出成绩条数 |
-
-所有数字都实时查库，不缓存。
-"""
-
+"""按角色准备首页数据（精简优化版）"""
 from __future__ import annotations
 
 from typing import Any
-
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
@@ -28,63 +13,17 @@ RECENT_LIMIT = 5
 
 
 def _count(model: Any, *conditions: Any) -> int:
-    """``SELECT count(*)`` 小工具。"""
-    stmt = select(func.count()).select_from(model)
-    if conditions:
-        stmt = stmt.where(*conditions)
-    return int(db.session.scalar(stmt) or 0)
-
-
-def _course_rows(user: Any) -> list[dict]:
-    """"我的课程"：教师看自己授课，学生看自己已选，管理员看不到这个卡片。"""
-    stmt = select(Course).options(selectinload(Course.teacher)).order_by(Course.semester, Course.code)
-
-    if user.role == "teacher":
-        teacher = user.teacher
-        if teacher is None:
-            return []
-        stmt = stmt.where(Course.teacher_id == teacher.id)
-    elif user.role == "student":
-        student = user.student
-        if student is None:
-            return []
-        stmt = stmt.join(Enrollment, Enrollment.course_id == Course.id).where(
-            Enrollment.student_id == student.id
-        )
-    else:
-        return []
-
-    rows: list[dict] = []
-    for course in db.session.scalars(stmt).unique().all():
-        rows.append(
-            {
-                "course": course,
-                "enrolled": _count(Enrollment, Enrollment.course_id == course.id),
-                "graded": int(
-                    db.session.scalar(
-                        select(func.count())
-                        .select_from(Score)
-                        .join(Enrollment, Score.enrollment_id == Enrollment.id)
-                        .where(Enrollment.course_id == course.id)
-                    )
-                    or 0
-                ),
-            }
-        )
-    return rows
+    """通用 count 工具"""
+    return int(db.session.scalar(select(func.count()).select_from(model).where(*conditions)) or 0)
 
 
 def dashboard_context(user: Any) -> dict:
     """首页模板需要的、按角色变化的上下文。"""
-    base = {
-        "recent": [],
-        "stats": {},
-        "course_rows": [],
-        "graded_mine": 0,
-        "enrolled_mine": 0,
-    }
+    base = {"recent": [], "stats": {}, "course_rows": [], "graded_mine": 0, "enrolled_mine": 0}
+    role = getattr(user, "role", None)
 
-    if user.role == "admin":
+    # 1. Admin 管理员角色
+    if role == "admin":
         base["stats"] = {
             "user": _count(User),
             "active_user": _count(User, User.is_active.is_(True)),
@@ -94,62 +33,57 @@ def dashboard_context(user: Any) -> dict:
             "enrollment": _count(Enrollment),
             "score": _count(Score),
         }
-        base["recent"] = db.session.scalars(
-            select(User).order_by(User.id.desc()).limit(RECENT_LIMIT)
-        ).all()
+        base["recent"] = db.session.scalars(select(User).order_by(User.id.desc()).limit(RECENT_LIMIT)).all()
         return base
 
-    if user.role == "teacher":
-        teacher = user.teacher
-        if teacher is None:
-            return base
-        course_ids = list(
-            db.session.scalars(select(Course.id).where(Course.teacher_id == teacher.id))
-        )
+    # 2. Teacher 教师或 Student 学生角色
+    if role == "teacher" and user.teacher:
+        teacher_id = user.teacher.id
+        stmt = select(Course).options(selectinload(Course.teacher)).where(Course.teacher_id == teacher_id)
+        
+        # 教师面板统计
+        course_ids = db.session.scalars(select(Course.id).where(Course.teacher_id == teacher_id)).all()
         scope = course_ids or [-1]
-        base["course_rows"] = _course_rows(user)
         base["stats"] = {
             "course": len(course_ids),
-            "student": int(
-                db.session.scalar(
-                    select(func.count(func.distinct(Enrollment.student_id))).where(
-                        Enrollment.course_id.in_(scope)
-                    )
-                )
-                or 0
-            ),
-            "graded": int(
-                db.session.scalar(
-                    select(func.count())
-                    .select_from(Score)
-                    .join(Enrollment, Score.enrollment_id == Enrollment.id)
-                    .where(Enrollment.course_id.in_(scope))
-                )
-                or 0
-            ),
+            "student": int(db.session.scalar(select(func.count(func.distinct(Enrollment.student_id))).where(Enrollment.course_id.in_(scope))) or 0),
+            "graded": int(db.session.scalar(select(func.count()).select_from(Score).join(Enrollment, Score.enrollment_id == Enrollment.id).where(Enrollment.course_id.in_(scope))) or 0),
         }
-        return base
 
-    if user.role == "student":
-        student = user.student
-        if student is None:
-            return base
-        base["course_rows"] = _course_rows(user)
-        base["enrolled_mine"] = _count(Enrollment, Enrollment.student_id == student.id)
-        base["graded_mine"] = int(
-            db.session.scalar(
-                select(func.count())
-                .select_from(Score)
-                .join(Enrollment, Score.enrollment_id == Enrollment.id)
-                .where(Enrollment.student_id == student.id)
-            )
-            or 0
-        )
-        base["stats"] = {
-            "course": base["enrolled_mine"],
-            "graded": base["graded_mine"],
-        }
-        return base
+    elif role == "student" and user.student:
+        student_id = user.student.id
+        stmt = select(Course).options(selectinload(Course.teacher)).join(Enrollment, Enrollment.course_id == Course.id).where(Enrollment.student_id == student_id)
+        
+        # 学生面板统计
+        base["enrolled_mine"] = _count(Enrollment, Enrollment.student_id == student_id)
+        base["graded_mine"] = int(db.session.scalar(select(func.count()).select_from(Score).join(Enrollment, Score.enrollment_id == Enrollment.id).where(Enrollment.student_id == student_id)) or 0)
+        base["stats"] = {"course": base["enrolled_mine"], "graded": base["graded_mine"]}
+    else:
+        return base  # 未登录或其他情况返回空 base
+
+    # 3. 统一加载教师/学生的课程及附带的选课数与成绩数（消灭 N+1 查询）
+    courses = db.session.scalars(stmt.order_by(Course.semester, Course.code)).unique().all()
+    if courses:
+        c_ids = [c.id for c in courses]
+        
+        # 批量获取每门课的选课人数
+        enrolled_map = dict(db.session.execute(
+            select(Enrollment.course_id, func.count()).where(Enrollment.course_id.in_(c_ids)).group_by(Enrollment.course_id)
+        ).all())
+        
+        # 批量获取每门课的已录成绩数
+        graded_map = dict(db.session.execute(
+            select(Enrollment.course_id, func.count())
+            .select_from(Score)
+            .join(Enrollment, Score.enrollment_id == Enrollment.id)
+            .where(Enrollment.course_id.in_(c_ids))
+            .group_by(Enrollment.course_id)
+        ).all())
+
+        base["course_rows"] = [
+            {"course": c, "enrolled": enrolled_map.get(c.id, 0), "graded": graded_map.get(c.id, 0)}
+            for c in courses
+        ]
 
     return base
 

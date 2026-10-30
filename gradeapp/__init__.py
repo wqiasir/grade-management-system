@@ -1,18 +1,4 @@
-"""杭电计算机学院学生成绩管理系统 —— 应用工厂。
-
-R1 交付物：可运行的 Flask 应用、6 张表的 ORM 定义、Alembic 迁移、``init-db`` / ``seed`` 命令。
-R2 交付物：认证蓝图（``gradeapp/auth.py``）、``base.html`` + 登录页、会话保持。
-R3 交付物：角色权限控制（RBAC）—— ``@role_required``、403 页面、按角色渲染的导航与首页、
-           管理员账号管理（``gradeapp/admin.py``）、只读课程视图（``gradeapp/score.py``）、
-           统计概览（``gradeapp/report.py``）。
-R4 交付物：学生信息管理 —— ``/admin/students`` 网页增删改查，自动建立关联登录账号。
-R5 交付物：教师与课程管理 —— ``/admin/teachers``、``/admin/courses`` 网页增删改查；
-           业务规则：仍授课的教师禁止删除、课程容量不得小于已选人数、删除课程级联选课与成绩。
-R6 交付物：选课管理 —— ``/score/enroll`` 可选课程列表、学生选课 / 退课、选课名单页；
-           业务规则：重复选课与容量上限校验、已出成绩不可退课、管理员可代学生加课 / 移出课程。
-架构参考 Flask 官方教程（Flaskr）的应用工厂与测试夹具写法，业务代码全部自写。
-"""
-
+"""杭电计算机学院学生成绩管理系统 —— 应用工厂。"""
 from __future__ import annotations
 
 import os
@@ -21,7 +7,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import click
-from flask import Flask, current_app, g, render_template, url_for
+from flask import Flask, current_app, g, render_template
 from flask.cli import with_appcontext
 from flask_migrate import upgrade as alembic_upgrade
 from sqlalchemy import func, inspect
@@ -30,49 +16,36 @@ from .extensions import csrf, db, migrate
 
 __version__ = "0.1.0"
 
-#: 默认数据库文件名（落在 instance/ 下，不入版本控制）
 DEFAULT_DB_FILENAME = "gradeapp.sqlite"
-
-#: 系统品牌信息 —— 界面标题、导航、页脚与文档统一取这里，改名只需改这两个常量。
-#: 系统面向杭州电子科技大学计算机学院的教学场景，业务数据不跨学院。
 SYSTEM_NAME = "杭电计算机学院学生成绩管理系统"
 SCHOOL_NAME = "杭州电子科技大学计算机学院"
 
 
 def create_app(test_config: dict | None = None) -> Flask:
-    """应用工厂。测试通过传入 ``test_config`` 拿到互相隔离的临时数据库。"""
+    """应用工厂：支持测试配置隔离与动态实例目录初始化。"""
     app = Flask(__name__, instance_relative_config=True)
 
     app.config.from_mapping(
-        # 系统品牌信息：模板里以 system_name / school_name 直接使用（见 _register_branding）
         SYSTEM_NAME=SYSTEM_NAME,
         SCHOOL_NAME=SCHOOL_NAME,
-        # 不在代码里硬编码密钥：开发用 .flaskenv，生产用环境变量
         SECRET_KEY=os.environ.get("SECRET_KEY"),
-        SQLALCHEMY_DATABASE_URI="sqlite:///"
-        + (Path(app.instance_path) / DEFAULT_DB_FILENAME).as_posix(),
+        SQLALCHEMY_DATABASE_URI=f"sqlite:///{(Path(app.instance_path) / DEFAULT_DB_FILENAME).as_posix()}",
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         SQLALCHEMY_ENGINE_OPTIONS={"pool_pre_ping": True},
     )
 
-    # 本地覆盖（instance/config.py，不入版本控制）
     app.config.from_pyfile("config.py", silent=True)
-    # FLASK_* 环境变量覆盖
     app.config.from_prefixed_env()
 
-    if test_config is not None:
+    if test_config:
         app.config.from_mapping(test_config)
 
     if not app.config.get("SECRET_KEY"):
         app.config["SECRET_KEY"] = secrets.token_hex(32)
-        app.logger.warning(
-            "未配置 SECRET_KEY，已生成随机临时密钥（重启后会话失效）；"
-            "请通过环境变量或 instance/config.py 配置。"
-        )
+        app.logger.warning("未配置 SECRET_KEY，已生成随机临时密钥（重启后会话失效）。")
 
     Path(app.instance_path).mkdir(parents=True, exist_ok=True)
 
-    # 会话保持：登录后 7 天有效；cookie 见不得 JS，SameSite 防跨站携带
     app.config.setdefault("PERMANENT_SESSION_LIFETIME", timedelta(days=7))
     app.config.setdefault("SESSION_COOKIE_HTTPONLY", True)
     app.config.setdefault("SESSION_COOKIE_SAMESITE", "Lax")
@@ -81,7 +54,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     migrate.init_app(app, db)
     csrf.init_app(app)
 
-    from . import models  # noqa: F401  —— 导入模型，注册到 db.metadata 供 Alembic 使用
+    from . import models  # noqa: F401
 
     _register_blueprints(app)
     _register_views(app)
@@ -94,7 +67,6 @@ def create_app(test_config: dict | None = None) -> Flask:
 
 
 def _register_blueprints(app: Flask) -> None:
-    """注册蓝图：R3 起为 auth / admin / score / report，后续轮次在 score、report 内继续补视图。"""
     from .admin import bp as admin_bp
     from .auth import bp as auth_bp
     from .report import bp as report_bp
@@ -106,9 +78,6 @@ def _register_blueprints(app: Flask) -> None:
     app.register_blueprint(report_bp)
 
 
-# --------------------------------------------------------------------------- #
-# 视图（R1 只有首页；R2 起由各蓝图接管）
-# --------------------------------------------------------------------------- #
 def _register_views(app: Flask) -> None:
     from .dashboard import dashboard_context
     from .decorators import ROLE_LABELS, role_label
@@ -116,20 +85,18 @@ def _register_views(app: Flask) -> None:
 
     @app.route("/")
     def index():
-        """首页：证明系统已启动，列出 6 张表的建表与数据情况。
-
-        R3 起顶部再按当前角色渲染一份"我的首页"（管理员看账号总览，
-        教师看自己的课，学生看自己的选课），三种角色看到的首页不同。
-        """
         existing = set(inspect(db.engine).get_table_names())
-        tables = []
-        for model in MODELS:
-            name = model.__tablename__
-            built = name in existing
-            rows = db.session.scalar(db.select(func.count()).select_from(model)) if built else None
-            tables.append({"name": name, "built": built, "rows": rows})
+        tables = [
+            {
+                "name": (name := m.__tablename__),
+                "built": (built := name in existing),
+                "rows": db.session.scalar(db.select(func.count()).select_from(m)) if built else None,
+            }
+            for m in MODELS
+        ]
 
         user = g.get("user")
+        ctx = dashboard_context(user) if user else {}
         return render_template(
             "index.html",
             version=__version__,
@@ -137,15 +104,11 @@ def _register_views(app: Flask) -> None:
             db_path=db.engine.url.database,
             role_labels=ROLE_LABELS,
             current_role_label=role_label(getattr(user, "role", None)),
-            **(dashboard_context(user) if user is not None else {}),
+            **ctx,
         )
 
 
-# --------------------------------------------------------------------------- #
-# 导航与错误处理（R3）
-# --------------------------------------------------------------------------- #
 def _register_navigation(app: Flask) -> None:
-    """把"按角色渲染的导航"注入所有模板（``base.html`` 里遍历 ``nav_items``）。"""
     from .menu import menu_for_user
 
     @app.context_processor
@@ -154,50 +117,29 @@ def _register_navigation(app: Flask) -> None:
 
 
 def _register_branding(app: Flask) -> None:
-    """把系统名与学院名注入所有模板（模板里用 ``system_name`` / ``school_name``）。
-
-    品牌信息只在配置里写一份：改系统名不用逐个模板改，也不会漏掉某张页面。
-    """
-
     @app.context_processor
     def inject_branding() -> dict[str, str]:
-        return {
-            "system_name": app.config["SYSTEM_NAME"],
-            "school_name": app.config["SCHOOL_NAME"],
-        }
+        return {"system_name": app.config["SYSTEM_NAME"], "school_name": app.config["SCHOOL_NAME"]}
 
 
 def _register_error_handlers(app: Flask) -> None:
-    """403 / 404 统一走自定义页面。
-
-    403 既覆盖装饰器拦截，也覆盖视图内的行级校验（``decorators.forbidden()``）。
-    ``decorators.forbidden()`` 已经把响应渲染好并带上状态码，
-    Flask 收到"状态码为 403 的响应"不会再次触发这里，所以 403 页面只会渲染一次。
-    """
     from .decorators import role_label
 
     @app.errorhandler(403)
-    def handle_forbidden(error):  # pragma: no cover - 由 decorators.forbidden() 正常覆盖
-        return (
-            render_template(
-                "errors/403.html",
-                required_roles=(),
-                message=None,
-                current_role_label=role_label(getattr(g.get("user"), "role", None)),
-            ),
-            403,
-        )
+    def handle_forbidden(error):
+        return render_template(
+            "errors/403.html",
+            required_roles=(),
+            message=None,
+            current_role_label=role_label(getattr(g.get("user"), "role", None)),
+        ), 403
 
     @app.errorhandler(404)
     def handle_not_found(error):
         return render_template("errors/404.html"), 404
 
 
-# --------------------------------------------------------------------------- #
-# CLI 命令
-# --------------------------------------------------------------------------- #
 def _migrations_dir() -> Path:
-    """迁移脚本目录：项目根（gradeapp 的上一级）/migrations。"""
     return Path(current_app.root_path).parent / "migrations"
 
 
@@ -209,12 +151,10 @@ def _sqlite_file_path() -> Path:
 
 
 @click.command("init-db")
-@click.option("--force", is_flag=True, help="先删除现有数据库文件再重建（会清空数据）")
+@click.option("--force", is_flag=True, help="先删除现有数据库文件再重建")
 @with_appcontext
 def init_db_command(force: bool) -> None:
-    """应用 Alembic 迁移创建数据库表（等价于 flask db upgrade）。"""
-    db_file = _sqlite_file_path()
-    directory = _migrations_dir()
+    db_file, directory = _sqlite_file_path(), _migrations_dir()
 
     if not (directory / "env.py").is_file():
         raise click.ClickException(f"未找到迁移目录 {directory}，请先执行 flask db init。")
@@ -234,24 +174,21 @@ def init_db_command(force: bool) -> None:
 @click.command("seed")
 @with_appcontext
 def seed_command() -> None:
-    """写入演示数据：admin / teacher / student 各一个 + 一门课程（可重复执行）。"""
     stats = _seed_sample_data()
     click.echo(
-        "种子数据完成："
-        f"新增用户 {stats['user']}、学生 {stats['student']}、"
+        f"种子数据完成：新增用户 {stats['user']}、学生 {stats['student']}、"
         f"教师 {stats['teacher']}、课程 {stats['course']}（已存在的记录跳过）"
     )
 
 
 def _seed_sample_data() -> dict[str, int]:
-    """幂等的种子数据写入。账号口令仅用于教学演示。"""
     from .models import Course, Student, Teacher, User
 
     created = {"user": 0, "student": 0, "teacher": 0, "course": 0}
 
     def get_or_create_user(username: str, role: str, real_name: str, password: str) -> User:
         user = db.session.scalar(db.select(User).filter_by(username=username))
-        if user is None:
+        if not user:
             user = User(username=username, role=role, real_name=real_name)
             user.set_password(password)
             db.session.add(user)
@@ -263,46 +200,23 @@ def _seed_sample_data() -> dict[str, int]:
     teacher_user = get_or_create_user("teacher", "teacher", "张伟", "teacher123")
     student_user = get_or_create_user("student", "student", "李小明", "student123")
 
-    teacher = teacher_user.teacher
-    if teacher is None:
-        teacher = Teacher(
-            user_id=teacher_user.id,
-            tno="T2001",
-            name="张伟",
-            title="副教授",
-            department="计算机学院",
-        )
+    if not teacher_user.teacher:
+        teacher = Teacher(user_id=teacher_user.id, tno="T2001", name="张伟", title="副教授", department="计算机学院")
         db.session.add(teacher)
         db.session.flush()
         created["teacher"] += 1
 
-    student = student_user.student
-    if student is None:
-        student = Student(
-            user_id=student_user.id,
-            sno="2025001",
-            name="李小明",
-            gender="男",
-            class_name="计算机2501",
-            enroll_year=2025,
-        )
+    if not student_user.student:
+        student = Student(user_id=student_user.id, sno="2025001", name="李小明", gender="男", class_name="计算机2501", enroll_year=2025)
         db.session.add(student)
         db.session.flush()
         created["student"] += 1
 
-    course = db.session.scalar(db.select(Course).filter_by(code="CS101"))
-    if course is None:
-        db.session.add(
-            Course(
-                code="CS101",
-                name="程序设计基础",
-                credit=3.0,
-                hours=48,
-                teacher_id=teacher.id,
-                semester="2025-2026-1",
-                capacity=60,
-            )
-        )
+    if not db.session.scalar(db.select(Course).filter_by(code="CS101")):
+        db.session.add(Course(
+            code="CS101", name="程序设计基础", credit=3.0, hours=48,
+            teacher_id=teacher_user.teacher.id, semester="2025-2026-1", capacity=60
+        ))
         created["course"] += 1
 
     db.session.commit()
