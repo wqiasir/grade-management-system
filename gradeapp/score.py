@@ -249,5 +249,66 @@ def roster_add(course_id: int):
 
     return redirect(url_for("score.course_detail", course_id=course.id))
 
+# --------------------------------------------------------------------------- #
+# 教师成绩录入与管理
+# --------------------------------------------------------------------------- #
+@bp.post("/courses/<int:course_id>/scores")
+@role_required("admin", "teacher")
+@login_required
+def scores_add(course_id: int):
+    course = db.get_or_404(Course, course_id)
+    if denial := guard_course_access(course):
+        return denial
+
+    enrollments = db.session.scalars(
+        select(Enrollment).where(Enrollment.course_id == course.id)
+    ).all()
+
+    updated_count = 0
+    for enrollment in enrollments:
+        field_name = f"score_{enrollment.id}"
+        raw_val = request.form.get(field_name)
+
+        if raw_val is not None:
+            raw_val = raw_val.strip()
+            # 如果输入为空，则跳过或删除已有成绩
+            if not raw_val:
+                existing_score = db.session.scalar(
+                    select(Score).where(Score.enrollment_id == enrollment.id)
+                )
+                if existing_score:
+                    db.session.delete(existing_score)
+                continue
+
+            try:
+                score_value = float(raw_val)
+            except ValueError:
+                flash(f"成绩格式错误：'{raw_val}' 不是有效的数字。", "error")
+                return redirect(url_for("score.course_detail", course_id=course.id))
+
+            # 分数范围合法性校验（例如 0 到 100 分）
+            if not (0 <= score_value <= 100):
+                flash(f"成绩必须在 0 到 100 之间，当前输入为：{score_value}", "error")
+                return redirect(url_for("score.course_detail", course_id=course.id))
+
+            # 查找是否已有成绩记录，有则更新，无则创建
+            score_record = db.session.scalar(
+                select(Score).where(Score.enrollment_id == enrollment.id)
+            )
+            if score_record:
+                score_record.score = score_value
+            else:
+                # 必须填入 exam_type，比如默认设为 "最终成绩" 或 "期末"
+                db.session.add(Score(
+                    enrollment_id=enrollment.id, 
+                    score=score_value, 
+                    exam_type="最终成绩"
+                ))
+            
+            updated_count += 1
+
+    db.session.commit()
+    flash(f"成功保存 {updated_count} 条学生的成绩。", "success")
+    return redirect(url_for("score.course_detail", course_id=course.id))
 
 __all__ = ["bp"]

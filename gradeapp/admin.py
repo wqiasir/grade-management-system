@@ -116,7 +116,6 @@ def user_list():
 
 @bp.post("/users/<int:user_id>/toggle")
 def toggle_user(user_id: int):
-    # 【已修改】去掉了多余的 .session
     user = db.get_or_404(User, user_id)
     if user.is_active and (reason := user.deactivation_blocker(actor=g.user)):
         flash(reason, "error")
@@ -239,7 +238,6 @@ def teacher_create():
 
 @bp.route("/teachers/<int:teacher_id>/edit", methods=["GET", "POST"])
 def teacher_edit(teacher_id: int):
-    # 【已修改】去掉了多余的 .session
     teacher = db.get_or_404(Teacher, teacher_id)
     form = TeacherForm(obj=teacher)
     if form.validate_on_submit():
