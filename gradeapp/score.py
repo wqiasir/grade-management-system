@@ -144,7 +144,6 @@ def enroll_courses():
 @role_required("student")
 @login_required
 def enroll(course_id: int):
-    # 【已修改】去掉了多余的 .session
     course = db.get_or_404(Course, course_id)
     student = g.user.student
     fallback = _safe_next(url_for("score.enroll_courses"))
@@ -172,7 +171,6 @@ def enroll(course_id: int):
 @role_required("admin", "student")
 @login_required
 def drop_enrollment(enrollment_id: int):
-    # 【已修改】去掉了多余的 .session
     enrollment = db.get_or_404(Enrollment, enrollment_id)
     course = enrollment.course
     code, name = (course.code, course.name) if course else ("?", "?")
@@ -199,7 +197,6 @@ def drop_enrollment(enrollment_id: int):
 @role_required("admin", "teacher", "student")
 @login_required
 def course_detail(course_id: int):
-    # 【已修改】去掉了多余的 .session
     course = db.get_or_404(Course, course_id)
     if denial := guard_course_access(course): return denial
 
@@ -230,7 +227,6 @@ def course_detail(course_id: int):
 @role_required("admin")
 @login_required
 def roster_add(course_id: int):
-    # 【已修改】去掉了多余的 .session
     course = db.get_or_404(Course, course_id)
     form = RosterAddForm()
     form.student_id.choices = _addable_student_choices(course)

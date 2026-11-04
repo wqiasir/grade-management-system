@@ -200,13 +200,15 @@ def _seed_sample_data() -> dict[str, int]:
     teacher_user = get_or_create_user("teacher", "teacher", "张伟", "teacher123")
     student_user = get_or_create_user("student", "student", "李小明", "student123")
 
-    if not teacher_user.teacher:
+    teacher = teacher_user.teacher
+    if not teacher:
         teacher = Teacher(user_id=teacher_user.id, tno="T2001", name="张伟", title="副教授", department="计算机学院")
         db.session.add(teacher)
         db.session.flush()
         created["teacher"] += 1
 
-    if not student_user.student:
+    student = student_user.student
+    if not student:
         student = Student(user_id=student_user.id, sno="2025001", name="李小明", gender="男", class_name="计算机2501", enroll_year=2025)
         db.session.add(student)
         db.session.flush()
@@ -215,7 +217,7 @@ def _seed_sample_data() -> dict[str, int]:
     if not db.session.scalar(db.select(Course).filter_by(code="CS101")):
         db.session.add(Course(
             code="CS101", name="程序设计基础", credit=3.0, hours=48,
-            teacher_id=teacher_user.teacher.id, semester="2025-2026-1", capacity=60
+            teacher_id=teacher.id, semester="2025-2026-1", capacity=60
         ))
         created["course"] += 1
 
