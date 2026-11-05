@@ -244,3 +244,128 @@ def test_score_unique_per_exam_type_and_range(app: Flask) -> None:
     with pytest.raises(IntegrityError):
         db.session.commit()
     db.session.rollback()
+
+
+# --------------------------------------------------------------------------- #
+# R12 部署与交付：密钥管理 / 生产入口
+# --------------------------------------------------------------------------- #
+def test_missing_secret_key_generates_random_one_with_warning(monkeypatch) -> None:
+    """未配置 SECRET_KEY 时自动生成随机密钥并告警（不会以空密钥启动）。
+
+    显式清掉 FLASK_* 环境变量：CLI runner 的测试会把 .flaskenv 里的 FLASK_DEBUG
+    留在 os.environ 里，使本测试的 app 进入 debug 模式（app.logger 变成
+    DebugLogger 新实例，捕获不到告警）。这里保持干净环境。
+    """
+    import logging
+
+    monkeypatch.delenv("FLASK_DEBUG", raising=False)
+    monkeypatch.delenv("FLASK_APP", raising=False)
+    messages: list[str] = []
+
+    class Capture(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            messages.append(record.getMessage())
+
+    logger = logging.getLogger("gradeapp")
+    handler = Capture()
+    logger.addHandler(handler)
+    try:
+        app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite://", "WTF_CSRF_ENABLED": False})
+        app2 = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite://", "WTF_CSRF_ENABLED": False})
+    finally:
+        logger.removeHandler(handler)
+
+    key = app.config["SECRET_KEY"]
+    assert isinstance(key, str) and len(key) >= 64  # token_hex(32) -> 64 字符
+    assert app2.config["SECRET_KEY"] != key          # 随机性：两次创建得到的密钥不同
+    assert any("SECRET_KEY" in m for m in messages)  # 告警文案明确提到密钥
+
+
+def test_explicit_secret_key_is_kept_and_no_warning(monkeypatch) -> None:
+    """配置了 SECRET_KEY 时不告警，值原样保留（测试 / 生产注入路径）。"""
+    import logging
+
+    monkeypatch.delenv("FLASK_DEBUG", raising=False)
+    monkeypatch.delenv("FLASK_APP", raising=False)
+    messages: list[str] = []
+
+    class Capture(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            messages.append(record.getMessage())
+
+    logger = logging.getLogger("gradeapp")
+    handler = Capture()
+    logger.addHandler(handler)
+    try:
+        app = create_app({
+            "TESTING": True,
+            "SECRET_KEY": "known-key",
+            "SQLALCHEMY_DATABASE_URI": "sqlite://",
+            "WTF_CSRF_ENABLED": False,
+        })
+    finally:
+        logger.removeHandler(handler)
+
+    assert app.config["SECRET_KEY"] == "known-key"
+    assert not any("SECRET_KEY" in m for m in messages)
+
+
+def test_wsgi_entry_exposes_app() -> None:
+    """生产入口 wsgi.py 暴露可用的 Flask 应用（waitress-serve wsgi:app）。"""
+    import os
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    os.environ.setdefault("SECRET_KEY", "wsgi-test-key")
+    import wsgi
+
+    assert wsgi.app is not None
+    assert wsgi.app.config["SECRET_KEY"] == "wsgi-test-key"
+    client = wsgi.app.test_client()
+    assert client.get("/").status_code == 200
+
+
+def test_env_example_documents_secret_key() -> None:
+    """.env.example 模板随仓库交付且包含 SECRET_KEY 说明（.env 本身不入库）。"""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    example = root / ".env.example"
+    assert example.is_file()
+    content = example.read_text(encoding="utf-8")
+    assert "SECRET_KEY" in content
+
+    gitignore = (root / ".gitignore").read_text(encoding="utf-8")
+    assert ".env" in gitignore  # 真实 .env 永不入库
+
+
+def _dbg_probe(monkeypatch) -> dict:
+    import logging
+    info = {}
+    monkeypatch.delenv("FLASK_DEBUG", raising=False)
+    monkeypatch.delenv("FLASK_APP", raising=False)
+    messages = []
+    class Capture(logging.Handler):
+        def emit(self, record): messages.append(record.getMessage())
+    logger = logging.getLogger("gradeapp")
+    handler = Capture(); logger.addHandler(handler)
+    info["handlers_before"] = list(logger.handlers)
+    info["level"] = logger.level
+    info["disabled"] = logger.disabled
+    app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite://", "WTF_CSRF_ENABLED": False})
+    info["logger_identity"] = app.logger is logger
+    info["logger_type"] = type(app.logger).__name__
+    info["messages"] = list(messages)
+    info["handlers_after"] = list(logger.handlers)
+    info["propagate"] = logger.propagate
+    logger.removeHandler(handler)
+    return info
+
+
+def test_dbg_probe_a(app: Flask, monkeypatch) -> None:
+    print(_dbg_probe(monkeypatch))
+
+
+def test_dbg_probe_b(monkeypatch) -> None:
+    print(_dbg_probe(monkeypatch))

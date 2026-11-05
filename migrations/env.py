@@ -13,7 +13,10 @@ config = context.config
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
-fileConfig(config.config_file_name)
+# disable_existing_loggers=False：fileConfig 默认会禁用 alembic.ini 里
+# 未声明的已有 logger（包括本应用自己的 "gradeapp" logger），导致跑完
+# init-db 的进程里应用日志全部失声（R12 发现并修复）。
+fileConfig(config.config_file_name, disable_existing_loggers=False)
 logger = logging.getLogger('alembic.env')
 
 
