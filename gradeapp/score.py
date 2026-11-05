@@ -20,7 +20,7 @@ from .decorators import (
     role_required,
 )
 from .extensions import db
-from .models import Course, Enrollment, Score, Student
+from .models import EXAM_TYPES, Course, Enrollment, Score, Student
 
 bp = Blueprint("score", __name__, url_prefix="/score")
 
@@ -79,27 +79,28 @@ def _addable_student_choices(course: Course) -> list[tuple[int, str]]:
 # --------------------------------------------------------------------------- #
 # 我的课程
 # --------------------------------------------------------------------------- #
-@bp.get("/my-courses")
-@role_required("admin", "teacher", "student")
-@login_required
-def my_courses():
-    user = g.user
+def _course_rows_for(user) -> list[dict]:
+    """按角色取出"我的课程"，并附上选课人数与已录成绩条数。
+
+    学生额外带 ``my_enrollment`` / ``my_score_count``，用于判断"能不能退课"；
+    教师与管理员不需要这两个字段（它们为 ``None`` / 0）。
+    """
     stmt = select(Course).options(selectinload(Course.teacher)).order_by(Course.semester, Course.code)
 
     if user.role == "teacher":
-        if not user.teacher: return render_template("score/my_courses.html", rows=[], role_label=role_label(user.role), role_labels=ROLE_LABELS, action_form=ActionForm())
+        if not user.teacher: return []
         stmt = stmt.where(Course.teacher_id == user.teacher.id)
     elif user.role == "student":
-        if not user.student: return render_template("score/my_courses.html", rows=[], role_label=role_label(user.role), role_labels=ROLE_LABELS, action_form=ActionForm())
+        if not user.student: return []
         stmt = stmt.join(Enrollment, Enrollment.course_id == Course.id).where(Enrollment.student_id == user.student.id)
     elif user.role != "admin":
-        return render_template("score/my_courses.html", rows=[], role_label=role_label(user.role), role_labels=ROLE_LABELS, action_form=ActionForm())
+        return []
 
     rows = []
     for course in db.session.scalars(stmt).unique().all():
         enrolled = _enrolled_count(course.id)
         graded = int(db.session.scalar(select(func.count()).select_from(Score).join(Enrollment, Score.enrollment_id == Enrollment.id).where(Enrollment.course_id == course.id)) or 0)
-        
+
         my_enrollment, my_score_count = None, 0
         if user.role == "student" and user.student:
             if my_enrollment := _find_enrollment(user.student.id, course.id):
@@ -107,7 +108,15 @@ def my_courses():
 
         rows.append({"course": course, "enrolled": enrolled, "graded": graded, "my_enrollment": my_enrollment, "my_score_count": my_score_count})
 
-    return render_template("score/my_courses.html", rows=rows, role_label=role_label(user.role), role_labels=ROLE_LABELS, action_form=ActionForm())
+    return rows
+
+
+@bp.get("/my-courses")
+@role_required("admin", "teacher", "student")
+@login_required
+def my_courses():
+    user = g.user
+    return render_template("score/my_courses.html", rows=_course_rows_for(user), role_label=role_label(user.role), role_labels=ROLE_LABELS, action_form=ActionForm())
 
 
 # --------------------------------------------------------------------------- #
@@ -152,8 +161,12 @@ def enroll(course_id: int):
         flash("当前账号没有关联的学生档案，无法选课。", "error")
         return redirect(fallback)
 
-    if _find_enrollment(student.id, course.id) or _capacity_reached(course, _enrolled_count(course.id)):
-        flash(f"选课失败：你已选过该课程或课程已满。", "error")
+    if _find_enrollment(student.id, course.id):
+        flash(f"你已经选过课程 [{course.code}] {course.name}，不能重复选课。", "error")
+        return redirect(fallback)
+
+    if _capacity_reached(course, _enrolled_count(course.id)):
+        flash(f"课程 [{course.code}] {course.name} 已满，无法选课。", "error")
         return redirect(fallback)
 
     db.session.add(Enrollment(student_id=student.id, course_id=course.id))
@@ -201,9 +214,15 @@ def course_detail(course_id: int):
     if denial := guard_course_access(course): return denial
 
     enrollments = db.session.scalars(select(Enrollment).options(selectinload(Enrollment.student)).where(Enrollment.course_id == course.id).order_by(Enrollment.student_id)).all()
-    score_map = {}
+    score_map, exam_scores = {}, {}
     for item in db.session.scalars(select(Score).join(Enrollment, Score.enrollment_id == Enrollment.id).where(Enrollment.course_id == course.id)).all():
         score_map.setdefault(item.enrollment_id, []).append(item)
+        exam_scores.setdefault(item.enrollment_id, {})[item.exam_type] = item
+
+    # R7 成绩录入：当前正在录入的考核类型（?exam= 切换，缺省为期末）
+    grade_exam = (request.args.get("exam") or "期末").strip()
+    if grade_exam not in EXAM_TYPES:
+        grade_exam = "期末"
 
     my_enrollment_id = None
     if g.user.role == "student" and g.user.student:
@@ -217,6 +236,7 @@ def course_detail(course_id: int):
     enrolled_count = len(enrollments)
     return render_template(
         "score/course_detail.html", course=course, enrollments=enrollments, score_map=score_map,
+        exam_scores=exam_scores, grade_exam=grade_exam, exam_types=EXAM_TYPES,
         enrolled_count=enrolled_count, remaining=_remaining_seats(course, enrolled_count),
         my_enrollment_id=my_enrollment_id, add_form=add_form, action_form=ActionForm(),
         role_label=role_label(g.user.role), back_url=url_for("score.my_courses")
@@ -231,12 +251,21 @@ def roster_add(course_id: int):
     form = RosterAddForm()
     form.student_id.choices = _addable_student_choices(course)
 
-    if not form.validate_on_submit() or not (student := db.session.get(Student, form.student_id.data)):
-        flash("请选择要加入课程的有效学生。", "error")
+    if not form.validate_on_submit():
+        message = "；".join(error for errors in form.errors.values() for error in errors)
+        flash(message or "请选择要加入课程的学生。", "error")
         return redirect(url_for("score.course_detail", course_id=course.id))
 
-    if _find_enrollment(student.id, course.id) or _capacity_reached(course, _enrolled_count(course.id)):
-        flash(f"添加失败：学生已选该课程或课程已满。", "error")
+    student = db.session.get(Student, form.student_id.data)
+    if student is None:
+        abort(404)
+
+    if _find_enrollment(student.id, course.id):
+        flash(f"学生 [{student.sno}] {student.name} 已经选过课程 [{course.code}] {course.name}，不能重复添加。", "error")
+        return redirect(url_for("score.course_detail", course_id=course.id))
+
+    if _capacity_reached(course, _enrolled_count(course.id)):
+        flash(f"课程 [{course.code}] {course.name} 已满，无法添加。", "error")
         return redirect(url_for("score.course_detail", course_id=course.id))
 
     db.session.add(Enrollment(student_id=student.id, course_id=course.id))
@@ -250,65 +279,142 @@ def roster_add(course_id: int):
     return redirect(url_for("score.course_detail", course_id=course.id))
 
 # --------------------------------------------------------------------------- #
-# 教师成绩录入与管理
+# 成绩查询（R8）：学生本人成绩单 + 管理员查任意学生
+# --------------------------------------------------------------------------- #
+def _transcript_groups_for(student_id: int) -> list[dict]:
+    """一名学生的成绩单：按学期倒序分组的课程与各考核类型成绩。
+
+    每行带 ``scores``（按 平时/期中/期末 排序的成绩列表）与 ``graded``（是否已出成绩）。
+    """
+    enrollments = db.session.scalars(
+        select(Enrollment)
+        .options(
+            selectinload(Enrollment.course).selectinload(Course.teacher),
+            selectinload(Enrollment.scores),
+        )
+        .join(Course, Enrollment.course_id == Course.id)
+        .where(Enrollment.student_id == student_id)
+        .order_by(Course.semester.desc(), Course.code)
+    ).all()
+
+    groups: dict[str, dict] = {}
+    for e in enrollments:
+        course = e.course
+        group = groups.setdefault(course.semester, {"semester": course.semester, "rows": []})
+        scores = sorted(
+            e.scores,
+            key=lambda s: EXAM_TYPES.index(s.exam_type) if s.exam_type in EXAM_TYPES else len(EXAM_TYPES),
+        )
+        group["rows"].append({"enrollment": e, "course": course, "scores": scores, "graded": bool(scores)})
+    return [groups[key] for key in sorted(groups, reverse=True)]
+
+
+def _render_transcript(student, back_url: str):
+    """渲染成绩单模板（学生本人与管理员查询共用一份）。"""
+    groups = _transcript_groups_for(student.id)
+    course_total = sum(len(group["rows"]) for group in groups)
+    graded_total = sum(1 for group in groups for row in group["rows"] if row["graded"])
+    return render_template(
+        "score/my_scores.html",
+        student=student,
+        groups=groups,
+        course_total=course_total,
+        graded_total=graded_total,
+        exam_types=EXAM_TYPES,
+        action_form=ActionForm(),
+        role_label=role_label(g.user.role),
+        back_url=back_url,
+    )
+
+
+@bp.get("/my-scores")
+@role_required("student")
+@login_required
+def my_scores():
+    """学生本人成绩单（R8）：按学期分组，仅本人（无参数可查别人）。"""
+    student = g.user.student
+    if not student:
+        return render_template(
+            "score/my_scores.html", student=None, groups=[], course_total=0, graded_total=0,
+            exam_types=EXAM_TYPES, action_form=ActionForm(),
+            role_label=role_label(g.user.role), back_url=url_for("score.my_courses"),
+        )
+    return _render_transcript(student, back_url=url_for("score.my_courses"))
+
+
+@bp.get("/students/<int:student_id>/scores")
+@role_required("admin")
+@login_required
+def student_scores(student_id: int):
+    """管理员查看任意学生的成绩单（R8）；教师查自己课程走课程详情，学生仅可查本人。"""
+    student = db.get_or_404(Student, student_id)
+    return _render_transcript(student, back_url=url_for("admin.student_list"))
+
+
+# --------------------------------------------------------------------------- #
+# 教师成绩录入与管理（R7）
 # --------------------------------------------------------------------------- #
 @bp.post("/courses/<int:course_id>/scores")
 @role_required("admin", "teacher")
 @login_required
 def scores_add(course_id: int):
+    """批量录入 / 修改成绩。
+
+    - 考核类型（平时 / 期中 / 期末）由表单下拉框指定，一次保存同一类型的一批分数；
+    - 分数留空 = 该生该类型**不修改**（不会误删已有成绩）；
+    - 数字格式与 0~100 范围在视图层校验（数据库 CHECK 约束兜底）；
+      无效行跳过并逐条报告，其余照常保存；
+    - ``updated_by`` 记录操作人，便于追溯谁改的分数。
+    """
     course = db.get_or_404(Course, course_id)
     if denial := guard_course_access(course):
         return denial
 
+    exam_type = (request.form.get("exam_type") or "").strip()
+    if exam_type not in EXAM_TYPES:
+        flash("考核类型不合法，请从下拉框中选择。", "error")
+        return redirect(url_for("score.course_detail", course_id=course.id))
+
     enrollments = db.session.scalars(
-        select(Enrollment).where(Enrollment.course_id == course.id)
+        select(Enrollment).options(selectinload(Enrollment.student)).where(Enrollment.course_id == course.id)
     ).all()
+    existing = {
+        (s.enrollment_id, s.exam_type): s
+        for s in db.session.scalars(
+            select(Score).join(Enrollment, Score.enrollment_id == Enrollment.id).where(Enrollment.course_id == course.id)
+        ).all()
+    }
 
-    updated_count = 0
+    saved, rejected = 0, []
     for enrollment in enrollments:
-        field_name = f"score_{enrollment.id}"
-        raw_val = request.form.get(field_name)
+        raw = (request.form.get(f"score_{enrollment.id}") or "").strip()
+        if not raw:
+            continue  # 留空 = 不修改
 
-        if raw_val is not None:
-            raw_val = raw_val.strip()
-            # 如果输入为空，则跳过或删除已有成绩
-            if not raw_val:
-                existing_score = db.session.scalar(
-                    select(Score).where(Score.enrollment_id == enrollment.id)
-                )
-                if existing_score:
-                    db.session.delete(existing_score)
-                continue
+        who = enrollment.student.name if enrollment.student else f"选课记录#{enrollment.id}"
+        try:
+            value = float(raw)
+        except ValueError:
+            rejected.append(f"{who}：'{raw}' 不是有效数字")
+            continue
+        if not (0 <= value <= 100):
+            rejected.append(f"{who}：{value:g} 不在 0~100 范围内")
+            continue
 
-            try:
-                score_value = float(raw_val)
-            except ValueError:
-                flash(f"成绩格式错误：'{raw_val}' 不是有效的数字。", "error")
-                return redirect(url_for("score.course_detail", course_id=course.id))
-
-            # 分数范围合法性校验（例如 0 到 100 分）
-            if not (0 <= score_value <= 100):
-                flash(f"成绩必须在 0 到 100 之间，当前输入为：{score_value}", "error")
-                return redirect(url_for("score.course_detail", course_id=course.id))
-
-            # 查找是否已有成绩记录，有则更新，无则创建
-            score_record = db.session.scalar(
-                select(Score).where(Score.enrollment_id == enrollment.id)
-            )
-            if score_record:
-                score_record.score = score_value
-            else:
-                # 必须填入 exam_type，比如默认设为 "最终成绩" 或 "期末"
-                db.session.add(Score(
-                    enrollment_id=enrollment.id, 
-                    score=score_value, 
-                    exam_type="最终成绩"
-                ))
-            
-            updated_count += 1
+        record = existing.get((enrollment.id, exam_type))
+        if record is None:
+            db.session.add(Score(enrollment_id=enrollment.id, exam_type=exam_type, score=value, updated_by=g.user.id))
+        else:
+            record.score = value
+            record.updated_by = g.user.id
+        saved += 1
 
     db.session.commit()
-    flash(f"成功保存 {updated_count} 条学生的成绩。", "success")
-    return redirect(url_for("score.course_detail", course_id=course.id))
+    if rejected:
+        flash(f"已保存 {saved} 条「{exam_type}」成绩；{len(rejected)} 条未保存：{'；'.join(rejected)}。", "error")
+    else:
+        flash(f"已保存 {saved} 条「{exam_type}」成绩。", "success")
+    return redirect(url_for("score.course_detail", course_id=course.id, exam=exam_type))
+
 
 __all__ = ["bp"]

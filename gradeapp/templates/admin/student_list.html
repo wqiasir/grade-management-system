@@ -48,6 +48,7 @@
                 {% endif %}
             </td>
             <td>
+                <a class="btn btn-ghost" href="{{ url_for('score.student_scores', student_id=student.id) }}">成绩单</a>
                 <a class="btn btn-ghost" href="{{ url_for('admin.student_edit', student_id=student.id) }}">编辑</a>
                 <form class="inline" method="post" action="{{ url_for('admin.student_delete', student_id=student.id) }}" onsubmit="return confirm('确定要删除学生【{{ student.name }}】及其关联账号吗？此操作不可撤销！');" style="display:inline;">
                     {{ action_form.csrf_token }}

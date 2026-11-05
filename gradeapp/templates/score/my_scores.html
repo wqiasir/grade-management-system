@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}{{ '成绩单' if g.user.role == 'admin' else '我的成绩' }} · {{ system_name }}{% endblock %}
+
+{% block content %}
+{% if g.user.role == 'admin' %}
+<h1>学生成绩单</h1>
+<p class="meta">
+    当前身份：<span class="badge">管理员</span> ·
+    学生：<strong>{{ student.name }}（{{ student.sno }}{% if student.class_name %} · {{ student.class_name }}{% endif %}）</strong>
+</p>
+{% else %}
+<h1>我的成绩</h1>
+<p class="meta">
+    当前身份：<span class="badge">学生</span> · 可见范围：<strong>仅你本人的成绩</strong> ·
+    各考核类型（平时 / 期中 / 期末）并列展示。
+</p>
+{% endif %}
+
+{% if student %}
+<p class="meta">
+    共修读 <strong>{{ course_total }}</strong> 门课程，其中已出成绩 <strong>{{ graded_total }}</strong> 门。
+</p>
+
+{% for group in groups %}
+<section class="card">
+    <h2>学期 {{ group.semester }}（{{ group.rows | length }} 门）</h2>
+    <table class="grid">
+        <thead>
+            <tr>
+                <th>课程代码</th>
+                <th>课程名称</th>
+                <th>授课教师</th>
+                <th>学分</th>
+                {% for t in exam_types %}<th>{{ t }}</th>{% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in group.rows %}
+            <tr>
+                <td><code>{{ row.course.code }}</code></td>
+                <td>{{ row.course.name }}</td>
+                <td>{{ row.course.teacher.name if row.course.teacher else '待安排' }}</td>
+                <td>{{ row.course.credit }}</td>
+                {% for t in exam_types %}
+                {% set matched = row.scores | selectattr('exam_type', '==', t) | list %}
+                <td>{% if matched %}<strong>{{ matched[0].score }}</strong>{% else %}<span class="hint">未录入</span>{% endif %}</td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endfor %}
+{% else %}
+<section class="card">
+    <p class="hint">当前账号没有关联的学生档案，无法查询成绩。</p>
+</section>
+{% endif %}
+
+{% if student and not groups %}
+<section class="card">
+    <p class="hint">还没有任何选课记录，去「选课」挑一门课吧。</p>
+</section>
+{% endif %}
+
+<p>
+    {% if g.user.role == 'student' %}
+    <a class="btn btn-ghost" href="{{ url_for('excel.export_my_scores') }}">导出我的成绩单（Excel）</a>
+    {% endif %}
+    <a class="btn btn-ghost" href="{{ back_url }}">返回</a>
+</p>
+{% endblock %}
+
+{% block footer %}R8 — 成绩查询 · R10 — 成绩单导出（学生仅本人）{% endblock %}

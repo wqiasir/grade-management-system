@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Excel 导入导出 · {{ system_name }}{% endblock %}
+
+{% block content %}
+<h1>Excel 导入导出</h1>
+<p class="meta">
+    当前身份：<span class="badge">{{ role_label }}</span> ·
+    导出与导入都在<strong>课程详情页</strong>内完成；导出生成的文件就是导入模板。
+</p>
+
+<section class="card">
+    <h2>使用说明</h2>
+    <ol>
+        <li>进入某门课的详情页（从「选课名单」进入），点「导出成绩」得到 .xlsx 文件；
+            空成绩的课程导出的也是<strong>完整名单</strong>，可直接当模板用；</li>
+        <li>在导出文件里填写 / 修改「平时 / 期中 / 期末」列（0~100 的数字，<strong>留空表示不修改</strong>），
+            身份列（学号 / 姓名 / 班级）不要改动；</li>
+        <li>回到同一门课的详情页，「导入成绩」上传该文件：学号必须在课程名单内，
+            无效行会被逐条报告，<strong>有效行照常导入</strong>（部分保存）；</li>
+        <li>同一考核类型重复导入 = 更新（不是新增）；导入会记录操作人。</li>
+    </ol>
+    <p class="hint">支持 .xlsx（openpyxl 读写）；加密或手工改动表头的文件会被拒绝并提示。</p>
+</section>
+
+<section class="card">
+    <h2>课程入口（{{ courses | length }} 门）</h2>
+    <table class="grid">
+        <thead>
+            <tr><th>课程代码</th><th>课程名称</th><th>授课教师</th><th>学期</th><th>快捷导出</th></tr>
+        </thead>
+        <tbody>
+            {% for course in courses %}
+            <tr>
+                <td><code>{{ course.code }}</code></td>
+                <td><a href="{{ url_for('score.course_detail', course_id=course.id) }}">{{ course.name }}</a></td>
+                <td>{{ course.teacher.name if course.teacher else '待安排' }}</td>
+                <td>{{ course.semester }}</td>
+                <td><a class="btn btn-ghost" href="{{ url_for('excel.export_course', course_id=course.id) }}">导出成绩</a></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="hint">还没有课程。</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}
+
+{% block footer %}R10 — Excel 导入导出（导出即模板，导入部分保存）{% endblock %}
