@@ -770,3 +770,65 @@ def test_teacher_report_excludes_other_teachers(
 
     assert "别人的课" not in html
     assert "0" in html  # 课程数 0
+
+
+# --------------------------------------------------------------------------- #
+# R11 路由清单完整性：url_map 上每条 GET 路由都必须有归属（矩阵或专项测试）
+# --------------------------------------------------------------------------- #
+#: 按"路径模式 → 测试归属"登记全部 GET 路由；新增路由若不在清单里，
+#: test_every_get_route_is_covered 会立刻失败，防止"加了路由忘了测"。
+ROUTE_COVERAGE_INVENTORY: dict[str, str] = {
+    "/": "权限矩阵（四种身份 200）",
+    "/auth/login": "tests/test_auth.py（登录页与重定向）",
+    "/auth/logout": "tests/test_auth.py（POST-only，GET 返回 405）",
+    "/admin/": "权限矩阵（仅 admin）",
+    "/admin/users": "权限矩阵（仅 admin）",
+    "/admin/users/<int:user_id>/toggle": "tests/test_permissions.py（写操作 POST-only）",
+    "/admin/students": "权限矩阵（仅 admin）",
+    "/admin/students/create": "权限矩阵（仅 admin）",
+    "/admin/students/<int:student_id>/edit": "tests/test_student.py（GET/POST 编辑）",
+    "/admin/students/<int:student_id>/delete": "tests/test_student.py（POST 删除）",
+    "/admin/teachers": "权限矩阵（仅 admin）",
+    "/admin/teachers/create": "权限矩阵（仅 admin）",
+    "/admin/teachers/<int:teacher_id>/edit": "tests/test_teacher_course.py（编辑与冲突）",
+    "/admin/teachers/<int:teacher_id>/delete": "tests/test_teacher_course.py（删除保护）",
+    "/admin/courses": "权限矩阵（仅 admin）",
+    "/admin/courses/create": "权限矩阵（仅 admin）",
+    "/admin/courses/<int:course_id>/edit": "tests/test_teacher_course.py / test_student.py（编辑与容量）",
+    "/admin/courses/<int:course_id>/delete": "tests/test_teacher_course.py（级联删除）",
+    "/score/my-courses": "权限矩阵（三角色，范围不同）",
+    "/score/enroll": "权限矩阵（仅 student）",
+    "/score/enroll/<int:course_id>": "tests/test_score.py（POST 选课）",
+    "/score/enrollments/<int:enrollment_id>/drop": "tests/test_score.py（POST 退课）",
+    "/score/courses/<int:course_id>": "tests/test_score.py（行级校验 + 名单页）",
+    "/score/courses/<int:course_id>/enroll": "tests/test_score.py（POST 管理员代选）",
+    "/score/courses/<int:course_id>/scores": "tests/test_score.py（POST 成绩录入）",
+    "/score/courses/<int:course_id>/export": "tests/test_excel.py（导出）",
+    "/score/courses/<int:course_id>/import": "tests/test_excel.py（导入）",
+    "/score/my-scores": "权限矩阵（仅 student）",
+    "/score/my-scores/export": "tests/test_excel.py（学生成绩单导出）",
+    "/score/students/<int:student_id>/scores": "tests/test_score.py（管理员查任意学生）",
+    "/score/excel": "tests/test_excel.py（指引页，仅 admin）",
+    "/report/overview": "权限矩阵 + tests/test_report.py（三角色范围）",
+    "/static/<path:filename>": "Flask 静态资源（框架内置，非业务路由）",
+}
+
+
+def test_every_get_route_is_covered(app: Flask) -> None:
+    """url_map 上的每条 GET 路由都要登记测试归属，杜绝"新增路由漏测"。"""
+    from flask import Flask
+
+    uncovered = []
+    for rule in app.url_map.iter_rules():
+        if "GET" not in (rule.methods or set()):
+            continue
+        if rule.rule not in ROUTE_COVERAGE_INVENTORY:
+            uncovered.append(rule.rule)
+    assert uncovered == [], f"以下 GET 路由未登记测试归属：{uncovered}"
+
+
+def test_inventory_routes_all_exist(app: Flask) -> None:
+    """清单里的路径必须真实存在于 url_map（反过来防止清单写错 / 路由被删）。"""
+    real_rules = {rule.rule for rule in app.url_map.iter_rules()}
+    missing = [path for path in ROUTE_COVERAGE_INVENTORY if path not in real_rules]
+    assert missing == [], f"清单里的路径已不在应用中（请更新清单）：{missing}"
