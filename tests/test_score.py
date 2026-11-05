@@ -836,3 +836,121 @@ def test_graded_enrollment_cannot_be_removed_after_entry(app: Flask, client: Fla
         f"/score/enrollments/{e.id}/drop", follow_redirects=True)
     assert "已出成绩的课程不允许退课" in response.get_data(as_text=True)
     assert enrollment_of(student, course) is not None
+
+
+# --------------------------------------------------------------------------- #
+# R8 成绩查询（学生本人成绩单 + 管理员查任意学生）
+# --------------------------------------------------------------------------- #
+def test_student_sees_own_transcript_by_semester(app: Flask, client: FlaskClient):
+    """我的成绩：按学期分组、各考核类型并列、只能看到自己的。"""
+    teacher = make_teacher()
+    c1 = make_course(teacher, "C001", name="数据结构", semester="2025-2026-1")
+    c2 = make_course(teacher, "C002", name="操作系统", semester="2025-2026-2")
+    me = make_student("s1")
+    other = make_student("s2")
+    e1 = enroll(me, c1)
+    enroll(other, c2, score=59.0)  # 别人的成绩，不应出现在 s1 的成绩单里
+    db.session.add(Score(enrollment_id=e1.id, exam_type="平时", score=95.0))
+    db.session.add(Score(enrollment_id=e1.id, exam_type="期末", score=88.0))
+    db.session.commit()
+    login(client, "s1")
+
+    html = client.get("/score/my-scores").get_data(as_text=True)
+
+    assert "学期 2025-2026-1" in html
+    assert "数据结构" in html
+    assert "平时" in html and "期末" in html
+    assert "95" in html and "88" in html
+    assert "未录入" in html  # 期中列没有成绩
+    # 别人的课程与成绩不出现
+    assert "操作系统" not in html
+    assert "59" not in html
+
+
+def test_student_transcript_shows_ungraded_course(app: Flask, client: FlaskClient):
+    """已选未出成绩的课程也在成绩单里（课程行存在，成绩列提示未录入）。"""
+    teacher = make_teacher()
+    course = make_course(teacher, "C001", name="线性代数")
+    me = make_student("s1")
+    enroll(me, course)
+    login(client, "s1")
+
+    html = client.get("/score/my-scores").get_data(as_text=True)
+
+    assert "线性代数" in html
+    assert "共修读 <strong>1</strong>" in html
+    assert "已出成绩 <strong>0</strong>" in html
+
+
+def test_student_transcript_filter_or_empty_state(app: Flask, client: FlaskClient):
+    """没有选课记录时给出空状态提示，而不是空页面或报错。"""
+    make_student("s1")
+    login(client, "s1")
+
+    html = client.get("/score/my-scores").get_data(as_text=True)
+    assert "还没有任何选课记录" in html
+
+
+def test_student_cannot_query_others_transcript(app: Flask, client: FlaskClient):
+    """学生换 student_id 查别人的成绩单 → 403（不是 404，区分权限与不存在）。"""
+    make_student("s1")
+    target = make_student("s2")
+    login(client, "s1")
+
+    response = client.get(f"/score/students/{target.id}/scores")
+    assert response.status_code == 403
+
+
+def test_admin_can_query_any_student_transcript(app: Flask, client: FlaskClient):
+    """管理员查任意学生成绩单：200 + 内容正确；不存在的学生 404。"""
+    teacher = make_teacher()
+    course = make_course(teacher, "C001", name="数据结构")
+    target = make_student("s2")
+    e = enroll(target, course, score=77.0)
+    make_student("s1")
+    login(client, make_user("admin1", "admin").username)
+
+    html = client.get(f"/score/students/{target.id}/scores").get_data(as_text=True)
+    assert "学生成绩单" in html
+    assert "数据结构" in html and "77" in html
+
+    assert client.get("/score/students/999999/scores").status_code == 404
+
+
+def test_teacher_cannot_use_transcript_routes(app: Flask, client: FlaskClient):
+    """教师不能进"我的成绩"（那是学生视角），也不能查任意学生的成绩单。"""
+    make_teacher("t1")
+    target = make_student("s2")
+    client_app = app.test_client()
+    login(client_app, "t1")
+
+    assert client_app.get("/score/my-scores").status_code == 403
+    assert client_app.get(f"/score/students/{target.id}/scores").status_code == 403
+
+
+def test_my_scores_nav_entry_only_for_student(app: Flask):
+    """导航：学生看到「我的成绩」，教师与管理员看不到。"""
+    make_student("s1")
+    make_teacher("t1")
+    make_user("admin1", "admin")
+
+    student_html = app.test_client()
+    login(student_html, "s1")
+    assert "/score/my-scores" in student_html.get("/").get_data(as_text=True)
+
+    teacher_client = app.test_client()
+    login(teacher_client, "t1")
+    assert "/score/my-scores" not in teacher_client.get("/").get_data(as_text=True)
+
+    admin_client = app.test_client()
+    login(admin_client, "admin1")
+    assert "/score/my-scores" not in admin_client.get("/").get_data(as_text=True)
+
+
+def test_student_list_links_to_transcript(app: Flask, client: FlaskClient):
+    """管理员学生列表每行有「成绩单」入口，直达该生的成绩单页。"""
+    target = make_student("s2")
+    login(client, make_user("admin1", "admin").username)
+
+    html = client.get("/admin/students").get_data(as_text=True)
+    assert f"/score/students/{target.id}/scores" in html

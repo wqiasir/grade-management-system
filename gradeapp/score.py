@@ -279,6 +279,79 @@ def roster_add(course_id: int):
     return redirect(url_for("score.course_detail", course_id=course.id))
 
 # --------------------------------------------------------------------------- #
+# 成绩查询（R8）：学生本人成绩单 + 管理员查任意学生
+# --------------------------------------------------------------------------- #
+def _transcript_groups_for(student_id: int) -> list[dict]:
+    """一名学生的成绩单：按学期倒序分组的课程与各考核类型成绩。
+
+    每行带 ``scores``（按 平时/期中/期末 排序的成绩列表）与 ``graded``（是否已出成绩）。
+    """
+    enrollments = db.session.scalars(
+        select(Enrollment)
+        .options(
+            selectinload(Enrollment.course).selectinload(Course.teacher),
+            selectinload(Enrollment.scores),
+        )
+        .join(Course, Enrollment.course_id == Course.id)
+        .where(Enrollment.student_id == student_id)
+        .order_by(Course.semester.desc(), Course.code)
+    ).all()
+
+    groups: dict[str, dict] = {}
+    for e in enrollments:
+        course = e.course
+        group = groups.setdefault(course.semester, {"semester": course.semester, "rows": []})
+        scores = sorted(
+            e.scores,
+            key=lambda s: EXAM_TYPES.index(s.exam_type) if s.exam_type in EXAM_TYPES else len(EXAM_TYPES),
+        )
+        group["rows"].append({"enrollment": e, "course": course, "scores": scores, "graded": bool(scores)})
+    return [groups[key] for key in sorted(groups, reverse=True)]
+
+
+def _render_transcript(student, back_url: str):
+    """渲染成绩单模板（学生本人与管理员查询共用一份）。"""
+    groups = _transcript_groups_for(student.id)
+    course_total = sum(len(group["rows"]) for group in groups)
+    graded_total = sum(1 for group in groups for row in group["rows"] if row["graded"])
+    return render_template(
+        "score/my_scores.html",
+        student=student,
+        groups=groups,
+        course_total=course_total,
+        graded_total=graded_total,
+        exam_types=EXAM_TYPES,
+        action_form=ActionForm(),
+        role_label=role_label(g.user.role),
+        back_url=back_url,
+    )
+
+
+@bp.get("/my-scores")
+@role_required("student")
+@login_required
+def my_scores():
+    """学生本人成绩单（R8）：按学期分组，仅本人（无参数可查别人）。"""
+    student = g.user.student
+    if not student:
+        return render_template(
+            "score/my_scores.html", student=None, groups=[], course_total=0, graded_total=0,
+            exam_types=EXAM_TYPES, action_form=ActionForm(),
+            role_label=role_label(g.user.role), back_url=url_for("score.my_courses"),
+        )
+    return _render_transcript(student, back_url=url_for("score.my_courses"))
+
+
+@bp.get("/students/<int:student_id>/scores")
+@role_required("admin")
+@login_required
+def student_scores(student_id: int):
+    """管理员查看任意学生的成绩单（R8）；教师查自己课程走课程详情，学生仅可查本人。"""
+    student = db.get_or_404(Student, student_id)
+    return _render_transcript(student, back_url=url_for("admin.student_list"))
+
+
+# --------------------------------------------------------------------------- #
 # 教师成绩录入与管理（R7）
 # --------------------------------------------------------------------------- #
 @bp.post("/courses/<int:course_id>/scores")

@@ -139,6 +139,8 @@ ROUTES: tuple[tuple[str, str, frozenset[str]], ...] = (
     # 第 6 节「选课 / 退课」：学生自主选课页；管理员/教师没有"给自己选课"的场景
     # （管理员的代选入口在课程名单页内，属于写操作，见 tests/test_score.py）
     ("选课页", "/score/enroll", frozenset({"student"})),
+    # 第 6 节「成绩查询」（R8）：学生查本人成绩单；管理员查任意学生由专用测试覆盖（路径带学生 id）
+    ("我的成绩", "/score/my-scores", frozenset({"student"})),
     ("统计报表", "/report/overview", frozenset({"admin", "teacher", "student"})),
 )
 
@@ -226,10 +228,10 @@ def test_nav_shows_pending_placeholders_for_future_rounds(
     app: Flask, client: FlaskClient, actors: dict[str, User | None]
 ) -> None:
     """后续轮次的功能在导航里是灰显占位（没有链接，不是死链）。"""
-    login(client, "student1")
+    login(client, "admin1")
     html = client.get("/").get_data(as_text=True)
 
-    assert "我的成绩" in html          # R8 的占位项
+    assert "Excel 导入导出" in html    # R10 的占位项
     assert "nav-pending" in html
 
 
@@ -538,14 +540,17 @@ def test_menu_filters_by_role_and_keeps_placeholders(
         admin_items = {item["key"]: item for item in menu.menu_for_user(actors["admin"])}
         student_items = {item["key"]: item for item in menu.menu_for_user(actors["student"])}
 
-    # 管理员能看到账号管理（可跳转），但看不到学生专属的"选课"
+    # 管理员能看到账号管理（可跳转），但看不到学生专属的"选课"；
+    # Excel 导入导出（R10）仍是占位项
     assert admin_items["admin_users"]["url"] == "/admin/users"
     assert "enroll" not in admin_items
+    assert admin_items["excel"]["url"] is None
+    assert admin_items["excel"]["pending"] == "R10"
 
-    # 学生看不到账号管理，但保留后续轮次的占位项（没有 url）
+    # 学生看不到账号管理；「我的成绩」在 R8 已实现为真实入口
     assert "admin_users" not in student_items
-    assert student_items["my_scores"]["url"] is None
-    assert student_items["my_scores"]["pending"] == "R8"
+    assert student_items["my_scores"]["url"] == "/score/my-scores"
+    assert student_items["my_scores"]["pending"] is None
 
 
 def test_menu_drops_items_whose_endpoint_is_not_registered(

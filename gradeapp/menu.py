@@ -19,7 +19,7 @@ MENU_ITEMS: tuple[dict[str, Any], ...] = (
     {"key": "report", "label": "统计报表", "endpoint": "report.overview", "roles": ("admin", "teacher", "student")},
     {"key": "grade_entry", "label": "成绩录入", "endpoint": "score.my_courses", "roles": ("admin", "teacher"), "pending": None},
     # ---- 以下为后续轮次的占位项：没有端点，灰显且不可点击 ----
-    {"key": "my_scores", "label": "我的成绩", "endpoint": None, "roles": ("student",), "pending": "R8"},
+    {"key": "my_scores", "label": "我的成绩", "endpoint": "score.my_scores", "roles": ("student",)},
     {"key": "excel", "label": "Excel 导入导出", "endpoint": None, "roles": ("admin",), "pending": "R10"},
 )
 
