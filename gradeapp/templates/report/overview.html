@@ -58,10 +58,85 @@
   </table>
 </section>
 
+<section class="card">
+  <h2>分数段分布（共 {{ summary.graded }} 条成绩）</h2>
+  <div style="max-width: 640px;"><canvas id="distChart" height="220"></canvas></div>
+  <table class="grid" style="margin-top: 0.8rem;">
+    <thead><tr>{% for d in distribution %}<th>{{ d.label }}</th>{% endfor %}</tr></thead>
+    <tbody><tr>{% for d in distribution %}<td>{{ d.count }}</td>{% endfor %}</tr></tbody>
+  </table>
+</section>
+
+{% if course_chart %}
+<section class="card">
+  <h2>各课程平均分（{{ course_chart | length }} 门已出成绩）</h2>
+  <div style="max-width: 640px;"><canvas id="courseChart" height="220"></canvas></div>
+  <table class="grid" style="margin-top: 0.8rem;">
+    <thead><tr><th>课程</th><th>平均分</th></tr></thead>
+    <tbody>
+      {% for c in course_chart %}
+      <tr><td><code>{{ c.label }}</code> {{ c.name }}</td><td>{{ c.average }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+{% if class_ranking %}
+<section class="card">
+  <h2>班级排名（按平均分）</h2>
+  <table class="grid">
+    <thead><tr><th>名次</th><th>班级</th><th>成绩条数</th><th>平均分</th><th>及格率</th></tr></thead>
+    <tbody>
+      {% for row in class_ranking %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ row.class_name }}</td>
+        <td>{{ row.graded }}</td>
+        <td>{{ row.average if row.average is not none else '—' }}</td>
+        <td>{{ row.pass_rate }}%</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
 <p class="hint">
-  R9 会在这里接上 Chart.js 的分数段柱状图与及格率图；本轮先把<strong>统计口径</strong>和
-  <strong>三种角色的数据范围</strong>固定下来（管理员全校 / 教师仅自授课程 / 学生仅本人）。
+  图表数据与上方表格同源（表格是不依赖 JavaScript 的回退展示）；所有口径都在服务端计算，
+  前端只负责渲染。分数段分箱：&lt;60 / 60~69 / 70~79 / 80~89 / 90~100（左闭右开，90~100 含 100）。
 </p>
 {% endblock %}
 
-{% block footer %}R3 — 角色权限控制（RBAC）· 统计范围按角色收缩{% endblock %}
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script>
+  (function () {
+    if (typeof Chart === 'undefined') { return; }  // 无网络时回退到表格
+    var dist = {{ distribution | tojson }};
+    var distData = dist.map(function (d) { return d.count; });
+    new Chart(document.getElementById('distChart'), {
+      type: 'bar',
+      data: {
+        labels: dist.map(function (d) { return d.label; }),
+        datasets: [{ label: '成绩条数', data: distData, backgroundColor: 'rgba(29,78,216,0.55)' }]
+      },
+      options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+    });
+
+    var canvas = document.getElementById('courseChart');
+    if (!canvas) { return; }
+    var courseChart = {{ course_chart | tojson }};
+    new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: courseChart.map(function (c) { return c.label; }),
+        datasets: [{ label: '平均分', data: courseChart.map(function (c) { return c.average; }), backgroundColor: 'rgba(15,118,110,0.55)' }]
+      },
+      options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, max: 100 } } }
+    });
+  })();
+</script>
+{% endblock %}
+
+{% block footer %}R9 — 统计报表：Chart.js 图表 / 分数段分布 / 班级排名（范围按角色收缩）{% endblock %}
