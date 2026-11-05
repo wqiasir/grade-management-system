@@ -640,3 +640,199 @@ def test_r6_nav_entries_by_role(app: Flask):
     teacher_html = teacher_client.get("/").get_data(as_text=True)
     assert "/score/my-courses" in teacher_html
     assert "/score/enroll" not in teacher_html
+
+
+# --------------------------------------------------------------------------- #
+# R7 成绩录入（考核类型 / 校验 / 行级权限）
+# --------------------------------------------------------------------------- #
+def grades_payload(course, enrollments, exam_type: str, values: dict[int, str]) -> dict[str, str]:
+    data = {"exam_type": exam_type}
+    for e in enrollments:
+        if e.id in values:
+            data[f"score_{e.id}"] = values[e.id]
+    return data
+
+
+def course_enrollments(course: Course) -> list[Enrollment]:
+    return list(db.session.scalars(
+        select(Enrollment).where(Enrollment.course_id == course.id).order_by(Enrollment.id)
+    ).all())
+
+
+def test_teacher_can_batch_enter_scores(app: Flask, client: FlaskClient):
+    """教师为自授课程批量录入成绩：落库、考核类型正确、updated_by 记录操作人。"""
+    teacher = make_teacher()
+    course = make_course(teacher, "C001", name="数据结构")
+    s1, s2 = make_student("s1"), make_student("s2")
+    e1, e2 = enroll(s1, course), enroll(s2, course)
+    login(client, teacher.user.username)
+
+    response = client.post(
+        f"/score/courses/{course.id}/scores",
+        data=grades_payload(course, [e1, e2], "期末", {e1.id: "88.5", e2.id: "72"}),
+        follow_redirects=True,
+    )
+
+    html = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert "已保存 2 条「期末」成绩" in html
+    rows = list(db.session.scalars(select(Score)).all())
+    assert len(rows) == 2
+    assert {r.exam_type for r in rows} == {"期末"}
+    assert {r.score for r in rows} == {88.5, 72.0}
+    assert {r.updated_by for r in rows} == {teacher.user_id}
+
+
+def test_score_entry_supports_multiple_exam_types(app: Flask, client: FlaskClient):
+    """平时 / 期中 / 期末是三条独立记录，同一类型重复保存是更新而不是新增。"""
+    teacher = make_teacher()
+    course = make_course(teacher, "C001")
+    student = make_student("s1")
+    e = enroll(student, course)
+    login(client, teacher.user.username)
+
+    client.post(f"/score/courses/{course.id}/scores",
+                data=grades_payload(course, [e], "平时", {e.id: "90"}))
+    client.post(f"/score/courses/{course.id}/scores",
+                data=grades_payload(course, [e], "期中", {e.id: "80"}))
+    client.post(f"/score/courses/{course.id}/scores",
+                data=grades_payload(course, [e], "期末", {e.id: "85"}))
+    # 同类型再次保存 → 更新
+    client.post(f"/score/courses/{course.id}/scores",
+                data=grades_payload(course, [e], "期末", {e.id: "92"}))
+
+    rows = list(db.session.scalars(select(Score).where(Score.enrollment_id == e.id)).all())
+    by_type = {r.exam_type: r.score for r in rows}
+    assert by_type == {"平时": 90.0, "期中": 80.0, "期末": 92.0}
+
+
+def test_score_entry_rejects_invalid_exam_type(app: Flask, client: FlaskClient):
+    """考核类型不在 平时/期中/期末 白名单内 → 拒绝且不落库。"""
+    teacher = make_teacher()
+    course = make_course(teacher, "C001")
+    e = enroll(make_student("s1"), course)
+    login(client, teacher.user.username)
+
+    response = client.post(
+        f"/score/courses/{course.id}/scores",
+        data=grades_payload(course, [e], "最终成绩", {e.id: "88"}),
+        follow_redirects=True,
+    )
+
+    assert "考核类型不合法" in response.get_data(as_text=True)
+    assert db.session.scalar(select(func.count()).select_from(Score)) == 0
+
+
+def test_score_entry_validates_format_and_range(app: Flask, client: FlaskClient):
+    """非数字 / 超范围的成绩被逐条拒绝并报告，同批其余有效成绩照常保存。"""
+    teacher = make_teacher()
+    course = make_course(teacher, "C001")
+    s1, s2, s3, s4 = make_student("s1"), make_student("s2"), make_student("s3"), make_student("s4")
+    e1, e2, e3, e4 = enroll(s1, course), enroll(s2, course), enroll(s3, course), enroll(s4, course)
+    login(client, teacher.user.username)
+
+    response = client.post(
+        f"/score/courses/{course.id}/scores",
+        data=grades_payload(course, [e1, e2, e3, e4],
+                            "期末", {e1.id: "abc", e2.id: "120", e3.id: "88", e4.id: "100"}),
+        follow_redirects=True,
+    )
+
+    html = response.get_data(as_text=True)
+    assert "2 条未保存" in html
+    assert "不是有效数字" in html
+    assert "不在 0~100 范围内" in html
+    # 有效行照常保存；0 与 100 这两个边界值合法
+    saved = {r.enrollment_id: r.score for r in db.session.scalars(select(Score)).all()}
+    assert saved == {e3.id: 88.0, e4.id: 100.0}
+
+
+def test_score_entry_blank_field_keeps_existing_score(app: Flask, client: FlaskClient):
+    """留空 = 不修改：已有成绩不会被误删。"""
+    teacher = make_teacher()
+    course = make_course(teacher, "C001")
+    e = enroll(make_student("s1"), course)
+    login(client, teacher.user.username)
+    client.post(f"/score/courses/{course.id}/scores",
+                data=grades_payload(course, [e], "期末", {e.id: "85"}))
+
+    response = client.post(
+        f"/score/courses/{course.id}/scores",
+        data=grades_payload(course, [e], "期末", {e.id: ""}),
+        follow_redirects=True,
+    )
+
+    assert "已保存 0 条「期末」成绩" in response.get_data(as_text=True)
+    row = db.session.scalar(select(Score).where(Score.enrollment_id == e.id))
+    assert row is not None and row.score == 85.0
+
+
+def test_grade_entry_is_row_level_checked(app: Flask, client: FlaskClient):
+    """教师只能给自己授课的课程录成绩：他人课程 403，学生 POST 403，均无副作用。"""
+    owner = make_teacher("owner")
+    other = make_teacher("other")
+    course = make_course(owner, "C001")
+    e = enroll(make_student("s1"), course)
+
+    other_client = app.test_client()
+    login(other_client, other.user.username)
+    response = other_client.post(
+        f"/score/courses/{course.id}/scores",
+        data=grades_payload(course, [e], "期末", {e.id: "88"}),
+    )
+    assert response.status_code == 403
+
+    student_client = app.test_client()
+    login(student_client, "s1")
+    assert student_client.post(
+        f"/score/courses/{course.id}/scores",
+        data=grades_payload(course, [e], "期末", {e.id: "88"}),
+    ).status_code == 403
+
+    assert db.session.scalar(select(func.count()).select_from(Score)) == 0
+
+
+def test_course_detail_shows_grade_entry_panel(app: Flask, client: FlaskClient):
+    """成绩录入面板：考核类型切换标签、按类型预填、其他类型成绩提示。"""
+    teacher = make_teacher()
+    course = make_course(teacher, "C001")
+    e = enroll(make_student("s1"), course)
+    db.session.add(Score(enrollment_id=e.id, exam_type="期末", score=85.0))
+    db.session.commit()
+    login(client, teacher.user.username)
+
+    # 默认期末：预填 85
+    html = client.get(f"/score/courses/{course.id}").get_data(as_text=True)
+    assert 'value="85.0"' in html
+    assert 'name="exam_type"' in html
+    assert "保存「期末」成绩" in html
+
+    # 切到期中：输入框为空，但能看到期末 85 的提示
+    html = client.get(f"/score/courses/{course.id}?exam=期中").get_data(as_text=True)
+    assert "期末 85" in html
+    assert "保存「期中」成绩" in html
+
+    # 学生视角：成绩可读但无录入表单
+    student_client = app.test_client()
+    login(student_client, "s1")
+    student_html = student_client.get(f"/score/courses/{course.id}").get_data(as_text=True)
+    assert "期末 85.0" in student_html
+    assert 'name="exam_type"' not in student_html
+
+
+def test_graded_enrollment_cannot_be_removed_after_entry(app: Flask, client: FlaskClient):
+    """录入成绩后，学生退课与管理员移出都会被拒绝（成绩是退课的封锁条件）。"""
+    teacher = make_teacher()
+    course = make_course(teacher, "C001")
+    student = make_student("s1")
+    e = enroll(student, course)
+    login(client, teacher.user.username)
+    client.post(f"/score/courses/{course.id}/scores",
+                data=grades_payload(course, [e], "期末", {e.id: "90"}))
+
+    student_client = app.test_client()
+    login(student_client, "s1")
+    response = student_client.post(
+        f"/score/enrollments/{e.id}/drop", follow_redirects=True)
+    assert "已出成绩的课程不允许退课" in response.get_data(as_text=True)
+    assert enrollment_of(student, course) is not None

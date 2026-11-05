@@ -17,7 +17,7 @@
     {% if g.user.role == 'admin' %}
     你可以把学生加入课程、移出课程或录入修改成绩；<strong>已出成绩的记录不能移出</strong>。
     {% elif g.user.role == 'teacher' %}
-    你可以为选课学生录入或修改成绩（教师不能选课 / 退课）。
+    选课名单对你<strong>只读</strong>（教师不能选课 / 退课 / 移人）；你可以为选课学生录入或修改成绩。
     {% else %}
     你可以退选自己的记录；<strong>已出成绩的课程不能退课</strong>。
     {% endif %}
@@ -49,8 +49,17 @@
     <h2>选课名单（{{ enrollments | length }} 人）</h2>
 
     {% if can_grade and enrollments %}
+    <p class="meta" style="margin-bottom: 0.4rem;">
+        正在录入考核类型：
+        {% for t in exam_types %}
+        {% if t == grade_exam %}<strong>{{ t }}</strong>{% else %}<a href="{{ url_for('score.course_detail', course_id=course.id, exam=t) }}">{{ t }}</a>{% endif %}
+        {% if not loop.last %} · {% endif %}
+        {% endfor %}
+        （切换类型会按该类型已有的分数预填）
+    </p>
     <form method="post" action="{{ url_for('score.scores_add', course_id=course.id) }}">
         {{ action_form.hidden_tag() }}
+        <input type="hidden" name="exam_type" value="{{ grade_exam }}">
         {% endif %}
 
         <table class="grid">
@@ -68,6 +77,8 @@
             </thead>
             <tbody>
                 {% for e in enrollments %}
+                {% set items = score_map.get(e.id, []) %}
+                {% set my_scores = exam_scores.get(e.id, {}) %}
                 <tr>
                     <td>{{ loop.index }}</td>
                     <td><code>{{ e.student.sno if e.student else '—' }}</code></td>
@@ -75,14 +86,13 @@
                     <td>{{ e.student.class_name if e.student else '—' }}</td>
                     <td class="hint">{{ e.enrolled_at.strftime('%Y-%m-%d %H:%M') if e.enrolled_at else '—' }}</td>
                     <td>
-                        {% set items = score_map.get(e.id, []) %}
-                        {% set current_score = items[0].score if items else '' %}
-
                         {% if can_grade %}
-                        <!-- 教师和管理员：显示可编辑的数字输入框 -->
-                        <input type="number" step="0.5" min="0" max="100" name="score_{{ e.id }}" value="{{ current_score }}" class="input" style="width: 100px;" placeholder="未录入">
+                        {% set current = my_scores.get(grade_exam) %}
+                        <input type="number" step="0.5" min="0" max="100" name="score_{{ e.id }}" value="{{ current.score if current else '' }}" class="input" style="width: 100px;" placeholder="未录入">
+                        {% set others = [] %}
+                        {% for s in items %}{% if s.exam_type != grade_exam %}{% if others.append(s.exam_type ~ ' ' ~ ('%.1f' | format(s.score) | replace('.0', ''))) %}{% endif %}{% endif %}{% endfor %}
+                        {% if others %}<span class="hint">{{ others | join(' · ') }}</span>{% endif %}
                         {% else %}
-                        <!-- 学生视角：只读展示 -->
                         {% if items %}
                         {% for s in items %}{{ s.exam_type }} {{ s.score }}{% if not loop.last %} · {% endif %}{% endfor %}
                         {% else %}
@@ -120,8 +130,9 @@
         </table>
 
         {% if can_grade and enrollments %}
-        <div style="margin-top: 1rem; text-align: right;">
-            <button type="submit" class="btn btn-primary">保存所有成绩</button>
+        <p class="hint">留空表示不修改该生本次考核类型的成绩；保存后可在「平时 / 期中 / 期末」间切换录入。</p>
+        <div style="margin-top: 0.4rem; text-align: right;">
+            <button type="submit" class="btn btn-primary">保存「{{ grade_exam }}」成绩</button>
         </div>
     </form>
     {% endif %}

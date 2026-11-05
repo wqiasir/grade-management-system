@@ -70,11 +70,11 @@ class TeacherForm(FlaskForm):
     password = PasswordField("初始密码", validators=[Optional(), Length(min=6, message="密码至少需要6个字符")])
 
 class CourseForm(FlaskForm):
-    code = StringField("课程代码", validators=[DataRequired("课程代码不能为空"), Length(max=32)])
-    name = StringField("课程名称", validators=[DataRequired("课程名称不能为空"), Length(max=128)])
-    credit = FloatField("学分", validators=[DataRequired("学分不能为空"), NumberRange(0.5, 20)])
-    hours = IntegerField("学时", validators=[DataRequired("学时不能为空"), NumberRange(1, 999)])
-    semester = StringField("开课学期", validators=[DataRequired("开课学期不能为空"), Length(max=32), Regexp(r"^\d{4}-\d{4}-\d{1,2}$", message="格式如 2025-2026-1")])
+    code = StringField("课程代码", validators=[DataRequired("课程代码不能为空"), Length(max=32, message="课程代码不能超过32位")])
+    name = StringField("课程名称", validators=[DataRequired("课程名称不能为空"), Length(max=128, message="课程名称不能超过128字")])
+    credit = FloatField("学分", validators=[DataRequired("学分不能为空"), NumberRange(0.5, 20, message="学分需在 0.5 ~ 20 之间")])
+    hours = IntegerField("学时", validators=[DataRequired("学时不能为空"), NumberRange(1, 999, message="学时需在 1 ~ 999 之间")])
+    semester = StringField("开课学期", validators=[DataRequired("开课学期不能为空"), Length(max=32, message="学期不能超过32位"), Regexp(r"^\d{4}-\d{4}-\d{1,2}$", message="学期格式应为 年份-年份-序号，如 2025-2026-1")])
     capacity = IntegerField("容量", validators=[InputRequired("容量不能为空"), NumberRange(0, 10000)])
     teacher_id = SelectField("授课教师", coerce=int, choices=[], validators=[Optional()])
 
@@ -321,7 +321,7 @@ def course_edit(course_id: int):
     if form.validate_on_submit():
         new_code = form.code.data.strip()
         if new_code != course.code and db.session.scalar(select(Course).where(Course.code == new_code, Course.id != course.id)):
-            flash(f"课程代码 '{new_code}' 已被占用！", "error")
+            flash(f"课程代码 '{new_code}' 已被其他课程占用！", "error")
         elif form.capacity.data > 0 and form.capacity.data < (enrolled := len(course.enrollments)):
             flash(f"容量不能小于当前已选人数（{enrolled} 人）！", "error")
         else:

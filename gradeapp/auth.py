@@ -140,7 +140,7 @@ def login():
         flash(f"欢迎回来，{user.real_name}！", "success")
         return redirect(_safe_next() or url_for("index"))
 
-    if form.is_submitted() and not form.errors:
+    if form.is_submitted():
         flash("登录失败，请检查下方提示。", "error")
 
     return render_template("auth/login.html", form=form)
@@ -155,16 +155,21 @@ def logout():
 
 
 def _safe_next() -> Optional[str]:
+    """只接受站内相对地址，防止用 ``?next=//evil.com`` 做开放重定向。"""
     target = request.args.get("next", "")
+    return target if _is_safe_next(target) else None
+
+
+def _is_safe_next(target: str) -> bool:
+    """``?next=`` 白名单判定：仅站内相对路径（``/`` 开头、无 scheme/netloc/反斜杠）。"""
     parts = urlsplit(target)
-    is_safe = (
+    return (
         bool(target)
         and not parts.scheme
         and not parts.netloc
         and target.startswith("/")
         and "\\" not in target
     )
-    return target if is_safe else None
 
 
 __all__ = ["bp", "LoginForm", "LogoutForm", "ROLE_LABELS", "generate_session_token", "verify_session_token"]
