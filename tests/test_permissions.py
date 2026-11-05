@@ -227,12 +227,17 @@ def test_nav_offers_admin_links_to_admin(
 def test_nav_shows_pending_placeholders_for_future_rounds(
     app: Flask, client: FlaskClient, actors: dict[str, User | None]
 ) -> None:
-    """后续轮次的功能在导航里是灰显占位（没有链接，不是死链）。"""
+    """R10 起 12 轮计划的导航项全部实现：三种角色的导航里不再有灰显占位。"""
     login(client, "admin1")
-    html = client.get("/").get_data(as_text=True)
+    assert "nav-pending" not in client.get("/").get_data(as_text=True)
 
-    assert "Excel 导入导出" in html    # R10 的占位项
-    assert "nav-pending" in html
+    client.post("/auth/logout")
+    login(client, "teacher1")
+    assert "nav-pending" not in client.get("/").get_data(as_text=True)
+
+    client.post("/auth/logout")
+    login(client, "student1")
+    assert "nav-pending" not in client.get("/").get_data(as_text=True)
 
 
 def test_unknown_role_name_fails_fast() -> None:
@@ -541,11 +546,11 @@ def test_menu_filters_by_role_and_keeps_placeholders(
         student_items = {item["key"]: item for item in menu.menu_for_user(actors["student"])}
 
     # 管理员能看到账号管理（可跳转），但看不到学生专属的"选课"；
-    # Excel 导入导出（R10）仍是占位项
+    # Excel 导入导出在 R10 已实现为真实入口
     assert admin_items["admin_users"]["url"] == "/admin/users"
     assert "enroll" not in admin_items
-    assert admin_items["excel"]["url"] is None
-    assert admin_items["excel"]["pending"] == "R10"
+    assert admin_items["excel"]["url"] == "/score/excel"
+    assert admin_items["excel"]["pending"] is None
 
     # 学生看不到账号管理；「我的成绩」在 R8 已实现为真实入口
     assert "admin_users" not in student_items

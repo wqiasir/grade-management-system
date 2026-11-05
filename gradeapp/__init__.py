@@ -69,6 +69,7 @@ def create_app(test_config: dict | None = None) -> Flask:
 def _register_blueprints(app: Flask) -> None:
     from .admin import bp as admin_bp
     from .auth import bp as auth_bp
+    from .excel_io import bp as excel_bp
     from .report import bp as report_bp
     from .score import bp as score_bp
 
@@ -76,6 +77,7 @@ def _register_blueprints(app: Flask) -> None:
     app.register_blueprint(admin_bp)
     app.register_blueprint(score_bp)
     app.register_blueprint(report_bp)
+    app.register_blueprint(excel_bp)
 
 
 def _register_views(app: Flask) -> None:

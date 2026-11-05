@@ -64,7 +64,12 @@
 </section>
 {% endif %}
 
-<p><a class="btn btn-ghost" href="{{ back_url }}">返回</a></p>
+<p>
+    {% if g.user.role == 'student' %}
+    <a class="btn btn-ghost" href="{{ url_for('excel.export_my_scores') }}">导出我的成绩单（Excel）</a>
+    {% endif %}
+    <a class="btn btn-ghost" href="{{ back_url }}">返回</a>
+</p>
 {% endblock %}
 
-{% block footer %}R8 — 成绩查询（学生仅本人；管理员可查任意学生）{% endblock %}
+{% block footer %}R8 — 成绩查询 · R10 — 成绩单导出（学生仅本人）{% endblock %}

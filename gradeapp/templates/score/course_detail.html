@@ -136,6 +136,18 @@
         </div>
     </form>
     {% endif %}
+
+    {% if can_grade %}
+    <div style="margin-top: 1rem; border-top: 1px solid #dde4ef; padding-top: 0.8rem;">
+        <a class="btn btn-ghost" href="{{ url_for('excel.export_course', course_id=course.id) }}">导出成绩（Excel）</a>
+        <form class="inline" method="post" action="{{ url_for('excel.import_course', course_id=course.id) }}" enctype="multipart/form-data" style="display: inline;">
+            {{ action_form.hidden_tag() }}
+            <input class="input input-inline" type="file" name="file" accept=".xlsx" required>
+            <button class="btn btn-ghost" type="submit">导入成绩（Excel）</button>
+        </form>
+        <span class="hint">导出文件即导入模板；导入按表头回填，留空不修改。</span>
+    </div>
+    {% endif %}
 </section>
 
 <p>
@@ -143,4 +155,4 @@
 </p>
 {% endblock %}
 
-{% block footer %}R7 — 成绩录入与管理（教师和管理员可维护）{% endblock %}
+{% block footer %}R7 — 成绩录入 · R10 — Excel 导入导出（教师和管理员可维护）{% endblock %}
