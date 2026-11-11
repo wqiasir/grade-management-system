@@ -1,51 +1,237 @@
 {% extends "base.html" %}
 
+{# 登录页自带整页布局，不使用 base 的 .page 容器 #}
+{% block page_class %}{% endblock %}
+
 {% block title %}登录 · {{ system_name }}{% endblock %}
 
-{% block content %}
-<section class="card auth-card">
-  <h1>登录</h1>
-  <p class="meta">请使用 {{ school_name }} 管理员分配的账号登录。本系统不开放自主注册。</p>
+{% block head %}
+<style>
+    .tle-login {
+        --tle-spot: 0, 50, 189;
+        --tle-text: 0, 0, 0;
+        min-height: calc(100vh - 60px - 74px); /* 视口 - 导航 - 页脚，保证页脚贴底 */
+        padding: 48px 20px 60px;
+        font-family: "Helvetica Neue", Helvetica, Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+        font-size: 16px;
+        line-height: 1.6;
+        color: rgb(var(--tle-text));
+        background: #fff;
+    }
 
-  <form method="post" class="form" novalidate>
-    {{ form.hidden_tag() }}
+        .tle-login *, .tle-login *::before, .tle-login *::after {
+            box-sizing: border-box;
+        }
 
-    <div class="field">
-      {{ form.username.label }}
-      {{ form.username(class="input", autocomplete="username", autofocus=true) }}
-      {% for error in form.username.errors %}
-        <p class="field-error">{{ error }}</p>
-      {% endfor %}
-    </div>
+    .tle-login__inner {
+        max-width: 460px;
+        margin: 0 auto;
+    }
 
-    <div class="field">
-      {{ form.password.label }}
-      {{ form.password(class="input", autocomplete="current-password") }}
-      {% for error in form.password.errors %}
-        <p class="field-error">{{ error }}</p>
-      {% endfor %}
-    </div>
+    @media (min-width: 900px) {
+        .tle-login {
+            padding-top: 90px;
+        }
 
-    <div class="form-actions">
-      {{ form.submit(class="btn btn-primary") }}
-    </div>
-  </form>
-</section>
+        .tle-login__inner {
+            max-width: 1100px;
+            display: flex;
+            gap: 80px;
+            align-items: flex-start;
+        }
 
-<section class="card">
-  <h2>演示账号</h2>
-  <p class="hint">执行 <code>flask seed</code> 后可用以下账号登录（仅用于教学演示）：</p>
-  <table class="grid">
-    <thead>
-      <tr><th>角色</th><th>用户名</th><th>口令</th></tr>
-    </thead>
-    <tbody>
-      <tr><td>管理员</td><td><code>admin</code></td><td><code>admin123</code></td></tr>
-      <tr><td>教师</td><td><code>teacher</code></td><td><code>teacher123</code></td></tr>
-      <tr><td>学生</td><td><code>student</code></td><td><code>student123</code></td></tr>
-    </tbody>
-  </table>
-</section>
+        .tle-login__intro {
+            flex: 1 1 0;
+        }
+
+        .tle-login__panel {
+            flex: 0 0 420px;
+        }
+    }
+
+    .tle-login__intro {
+        margin-bottom: 36px;
+    }
+
+    .tle-login__eyebrow {
+        display: inline-block;
+        margin: 0 0 22px;
+        padding-top: 18px;
+        border-top: 3px solid rgb(var(--tle-spot));
+        font-size: 14px;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+    }
+
+    .tle-login__title {
+        margin: 0 0 16px;
+        font-size: 40px;
+        font-weight: 600;
+        line-height: 1.1;
+    }
+
+    @media (min-width: 900px) {
+        .tle-login__title {
+            font-size: 47px;
+        }
+    }
+
+    .tle-login__sub {
+        margin: 0;
+        font-size: 18px;
+        line-height: 1.4;
+        color: rgba(var(--tle-text), .65);
+    }
+
+    .tle-login__panel {
+        border-top: 1px solid rgba(var(--tle-text), .1);
+        padding-top: 28px;
+    }
+
+    @media (min-width: 900px) {
+        .tle-login__panel {
+            border-top: 0;
+            padding-top: 0;
+        }
+    }
+
+    .tle-login__field {
+        margin: 0 0 22px;
+    }
+
+        .tle-login__field label {
+            display: block;
+            margin: 0 0 6px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .tle-login__field input[type="text"],
+        .tle-login__field input[type="password"],
+        .tle-login__field input[type="email"],
+        .tle-login__field input:not([type]) {
+            display: block;
+            width: 100%;
+            margin: 0;
+            padding: 11px 12px;
+            border: 1px solid rgba(var(--tle-text), .35);
+            border-radius: 0;
+            background: #fff;
+            font: inherit;
+            font-size: 16px;
+            color: inherit;
+            box-shadow: none;
+            transition: border-color .15s;
+        }
+
+        .tle-login__field input:hover {
+            border-color: rgba(var(--tle-text), .7);
+        }
+
+        .tle-login__field input:focus {
+            outline: 3px solid rgba(var(--tle-spot), .35);
+            outline-offset: 0;
+            border-color: rgb(var(--tle-spot));
+        }
+
+        .tle-login__field.has-error input {
+            border-color: #c00;
+        }
+
+    .tle-login__error {
+        margin: 6px 0 0;
+        font-size: 14px;
+        color: #c00;
+    }
+
+    .tle-login__check {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 0 22px;
+        font-size: 15px;
+    }
+
+        .tle-login__check input {
+            width: 16px;
+            height: 16px;
+            margin: 0;
+            accent-color: rgb(var(--tle-spot));
+        }
+
+        .tle-login__check label {
+            margin: 0;
+            font-weight: 400;
+        }
+
+    .tle-login__submit {
+        display: block;
+        width: 100%;
+        padding: 12px 22px;
+        border: 2px solid rgb(var(--tle-spot));
+        border-radius: 0;
+        background: rgb(var(--tle-spot));
+        color: #fff;
+        font: inherit;
+        font-size: 16px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background-color .15s, color .15s;
+    }
+
+        .tle-login__submit:hover {
+            background: #fff;
+            color: rgb(var(--tle-spot));
+        }
+
+        .tle-login__submit:focus-visible {
+            outline: 3px solid rgb(var(--tle-spot));
+            outline-offset: 3px;
+        }
+
+    @media (prefers-reduced-motion: reduce) {
+        .tle-login__submit, .tle-login__field input {
+            transition: none;
+        }
+    }
+</style>
 {% endblock %}
 
-{% block footer %}R2 — 用户认证{% endblock %}
+{% block content %}
+<main class="tle-login">
+    <div class="tle-login__inner">
+
+        <div class="tle-login__intro">
+            <p class="tle-login__eyebrow">Academic Portal</p>
+            <h1 class="tle-login__title">{{ system_name }}</h1>
+            <p class="tle-login__sub">{{ school_name }}</p>
+        </div>
+
+        <div class="tle-login__panel">
+            <form method="post" novalidate>
+                {{ form.hidden_tag() }}
+
+                {% for field in form if field.type not in ['CSRFTokenField', 'HiddenField', 'SubmitField', 'BooleanField'] %}
+                <div class="tle-login__field{% if field.errors %} has-error{% endif %}">
+                    {{ field.label }}
+                    {{ field(autocomplete=('current-password' if field.type == 'PasswordField' else 'username'), autofocus=loop.first) }}
+                    {% for err in field.errors %}
+                    <p class="tle-login__error">{{ err }}</p>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+
+                {% for field in form if field.type == 'BooleanField' %}
+                <div class="tle-login__check">
+                    {{ field }}
+                    {{ field.label }}
+                </div>
+                {% endfor %}
+
+                <button type="submit" class="tle-login__submit">登录</button>
+            </form>
+        </div>
+
+    </div>
+</main>
+{% endblock %}

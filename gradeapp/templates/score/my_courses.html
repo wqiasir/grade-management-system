@@ -1,89 +1,89 @@
 {% extends "base.html" %}
+{% from "_macros.html" import page_header %}
 
-{% block title %}{% if g.user.role == 'admin' %}选课名单{% else %}我的课程{% endif %} · {{ system_name }}{% endblock %}
+{% block page_class %}{% endblock %}
+{% block title %}{% if g.user.role is eq 'admin' %}选课名单{% else %}我的课程{% endif %} · {{ system_name }}{% endblock %}
 
 {% block content %}
-{% if g.user.role == 'admin' %}
-  <h1>选课名单</h1>
-  <p class="meta">当前身份：<span class="badge">管理员</span> · 可见范围：<strong>全部课程</strong> ·
-    进入课程详情可查看名单、代学生加课或移出课程。</p>
-{% elif g.user.role == 'teacher' %}
-  <h1>我的课程</h1>
-  <p class="meta">当前身份：<span class="badge">教师</span> · 可见范围：<strong>仅你授课的课程</strong> ·
-    课程详情里的名单为只读（教师不能选课 / 退课）。</p>
-{% else %}
-  <h1>我的课程</h1>
-  <p class="meta">当前身份：<span class="badge">学生</span> · 可见范围：<strong>仅你已选的课程</strong> ·
-    已出成绩的课程不能退课。</p>
-  <p><a class="btn btn-primary" href="{{ url_for('score.enroll_courses') }}">去选课</a></p>
-{% endif %}
+{% set is_admin = g.user.role is eq 'admin' %}
+{% set is_teacher = g.user.role is eq 'teacher' %}
+{% set is_student = g.user.role is eq 'student' %}
+<main class="tle-page">
+    <div class="tle-page__inner">
 
-<section class="card">
-  <h2>课程列表（{{ rows | length }} 门）</h2>
-  <table class="grid">
-    <thead>
-      <tr>
-        <th>课程代码</th><th>课程名称</th><th>授课教师</th><th>学期</th>
-        <th>学分 / 学时</th><th>已选 / 容量</th>
-        <th>{% if g.user.role == 'student' %}我的成绩{% else %}已录成绩{% endif %}</th>
-        <th>操作</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for row in rows %}
-      <tr>
-        <td><code>{{ row.course.code }}</code></td>
-        <td>{{ row.course.name }}</td>
-        <td>{{ row.course.teacher.name if row.course.teacher else '待安排' }}</td>
-        <td>{{ row.course.semester }}</td>
-        <td>{{ row.course.credit }} / {{ row.course.hours }}</td>
-        <td>
-          {{ row.enrolled }} / {% if row.course.capacity > 0 %}{{ row.course.capacity }}{% else %}不限{% endif %}
-        </td>
-        <td>
-          {% if g.user.role == 'student' %}
-            {{ row.my_score_count }}
-          {% else %}
-            {{ row.graded }}
-          {% endif %}
-        </td>
-        <td>
-          <a href="{{ url_for('score.course_detail', course_id=row.course.id) }}">
-            {% if g.user.role == 'admin' %}查看名单{% elif g.user.role == 'teacher' %}查看名单{% else %}课程详情{% endif %}
-          </a>
+        {% call page_header('课程', '选课名单' if is_admin else '我的课程') %}
+        {% if is_student %}<a class="btn btn-primary" href="{{ url_for('score.enroll_courses') }}">去选课</a>{% endif %}
+        {% endcall %}
 
-          {% if g.user.role == 'student' and row.my_enrollment %}
-            {% if row.my_score_count > 0 %}
-              <span class="hint">已有成绩，不可退课</span>
-            {% else %}
-              <form class="inline" method="post"
-                    action="{{ url_for('score.drop_enrollment', enrollment_id=row.my_enrollment.id) }}"
-                    onsubmit="return confirm('确定退选【{{ row.course.name }}】吗？');">
-                {{ action_form.csrf_token }}
-                <input type="hidden" name="next" value="{{ url_for('score.my_courses') }}">
-                <button class="btn btn-ghost" type="submit">退课</button>
-              </form>
-            {% endif %}
-          {% endif %}
-        </td>
-      </tr>
-      {% else %}
-      <tr>
-        <td colspan="8" class="hint">
-          {% if g.user.role == 'teacher' %}你名下还没有课程（由管理员在课程管理中排课）。
-          {% elif g.user.role == 'student' %}你还没有选课，去「<a href="{{ url_for('score.enroll_courses') }}">选课</a>」页面挑几门吧。
-          {% else %}还没有课程数据。{% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</section>
+        <p class="tle-page__meta">
+            共 <strong>{{ rows | length }}</strong> 门课程 ·
+            {% if is_admin %}可见范围：<strong>全部课程</strong>
+            {% elif is_teacher %}可见范围：<strong>仅你授课的课程</strong>
+            {% else %}可见范围：<strong>仅你已选的课程</strong>{% endif %}
+        </p>
 
-<p class="hint">
-  R6 选课管理：学生自主选课 / 退课；管理员与教师查看选课名单；
-  管理员还可以代学生加课、把学生移出课程。重复选课、超出容量、已出成绩后退课都会被服务端拒绝。
-</p>
+        <p class="note">
+            {% if is_admin %}进入课程详情可查看名单、代学生加课或移出课程。
+            {% elif is_teacher %}课程详情里的名单为只读，教师不能选课、退课，但可以录入成绩。
+            {% else %}已出成绩的课程不能退课。{% endif %}
+        </p>
+
+        <div class="tle-table-wrapper">
+            <table class="grid">
+                <thead>
+                    <tr>
+                        <th>课程代码</th>
+                        <th>课程名称</th>
+                        <th>授课教师</th>
+                        <th>学期</th>
+                        <th>学分 / 学时</th>
+                        <th>已选 / 容量</th>
+                        <th>{% if is_student %}我的成绩{% else %}已录成绩{% endif %}</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                    <tr>
+                        <td><code>{{ row.course.code }}</code></td>
+                        <td>{{ row.course.name }}</td>
+                        <td>{{ row.course.teacher.name if row.course.teacher else '待安排' }}</td>
+                        <td>{{ row.course.semester }}</td>
+                        <td>{{ row.course.credit }} / {{ row.course.hours }}</td>
+                        <td>{{ row.enrolled }} / {{ row.course.capacity if row.course.capacity > 0 else '不限' }}</td>
+                        <td>{{ row.my_score_count if is_student else row.graded }}</td>
+                        <td>
+                            <div class="row-actions">
+                                <a class="btn btn-ghost btn-sm" href="{{ url_for('score.course_detail', course_id=row.course.id) }}">{{ '课程详情' if is_student else '查看名单' }}</a>
+                                {% if is_student and row.my_enrollment %}
+                                {% if row.my_score_count > 0 %}
+                                <span class="hint">已有成绩，不可退课</span>
+                                {% else %}
+                                <form class="inline" method="post"
+                                      action="{{ url_for('score.drop_enrollment', enrollment_id=row.my_enrollment.id) }}"
+                                      onsubmit="return confirm('确定退选【{{ row.course.name }}】吗？');">
+                                    {{ action_form.csrf_token }}
+                                    <input type="hidden" name="next" value="{{ url_for('score.my_courses') }}">
+                                    <button class="btn btn-danger btn-sm" type="submit">退课</button>
+                                </form>
+                                {% endif %}
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="empty">
+                            {% if is_teacher %}你名下还没有课程，课程由管理员排课后会显示在这里。
+                            {% elif is_student %}你还没有选课，去<a href="{{ url_for('score.enroll_courses') }}">选课</a>页面挑几门吧。
+                            {% else %}还没有课程数据。{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+</main>
 {% endblock %}
-
-{% block footer %}R6 — 选课管理 · 课程范围按角色收缩 · 名单行级校验{% endblock %}

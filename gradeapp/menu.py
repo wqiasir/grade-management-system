@@ -21,6 +21,7 @@ MENU_ITEMS: tuple[dict[str, Any], ...] = (
     {"key": "my_scores", "label": "我的成绩", "endpoint": "score.my_scores", "roles": ("student",)},
     {"key": "excel", "label": "Excel 导入导出", "endpoint": "excel.excel_guide", "roles": ("admin",)},
     # R10 起 12 轮计划的导航项已全部实现，不再有灰显占位
+    #预计新增功能：邮件发送功能、管理员&教师公告功能、
 )
 
 

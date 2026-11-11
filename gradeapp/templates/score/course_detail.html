@@ -1,158 +1,171 @@
 {% extends "base.html" %}
+{% from "_macros.html" import page_header %}
 
+{% block page_class %}{% endblock %}
 {% block title %}{{ course.code }} {{ course.name }} · {{ system_name }}{% endblock %}
 
 {% block content %}
-<h1>{{ course.name }}</h1>
-<p class="meta">
-    <code>{{ course.code }}</code> ·
-    学期 {{ course.semester }} ·
-    {{ course.credit }} 学分 / {{ course.hours }} 学时 ·
-    已选 {{ enrolled_count }} / {% if course.capacity > 0 %}{{ course.capacity }}{% else %}不限{% endif %}
-    {% if remaining is not none %}（余 {{ remaining }}）{% endif %} ·
-    授课教师 {{ course.teacher.name if course.teacher else '待安排' }}
-</p>
-<p class="meta">
-    当前身份：{{ role_label }} ·
-    {% if g.user.role == 'admin' %}
-    你可以把学生加入课程、移出课程或录入修改成绩；<strong>已出成绩的记录不能移出</strong>。
-    {% elif g.user.role == 'teacher' %}
-    选课名单对你<strong>只读</strong>（教师不能选课 / 退课 / 移人）；你可以为选课学生录入或修改成绩。
-    {% else %}
-    你可以退选自己的记录；<strong>已出成绩的课程不能退课</strong>。
-    {% endif %}
-</p>
-
-{% if add_form %}
-<section class="card">
-    <h2>添加学生</h2>
-    {% if add_form.student_id.choices | length > 1 %}
-    <form method="post" action="{{ url_for('score.roster_add', course_id=course.id) }}">
-        {{ add_form.hidden_tag() }}
-        <div class="filter-bar" style="margin: 0;">
-            <label for="student_id">学生</label>
-            {{ add_form.student_id(class="input input-inline") }}
-            <button class="btn btn-primary" type="submit">加入课程</button>
-        </div>
-        <p class="hint">下拉框只列出还没有选这门课的学生。容量已满时会拒绝加入。</p>
-    </form>
-    {% else %}
-    <p class="hint">所有学生都已在这门课的名单里。</p>
-    {% endif %}
-</section>
-{% endif %}
-
-<!-- 如果是老师或管理员，将整个名单表格包裹在成绩提交表单中 -->
+{% set is_admin = g.user.role is eq 'admin' %}
+{% set is_teacher = g.user.role is eq 'teacher' %}
 {% set can_grade = g.user.role in ('admin', 'teacher') %}
+{% set has_action_col = g.user.role in ('admin', 'student') %}
+<main class="tle-page">
+    <div class="tle-page__inner">
 
-<section class="card">
-    <h2>选课名单（{{ enrollments | length }} 人）</h2>
+        {% call page_header(course.code, course.name) %}
+        <a class="btn btn-ghost" href="{{ back_url }}">返回</a>
+        {% endcall %}
 
-    {% if can_grade and enrollments %}
-    <p class="meta" style="margin-bottom: 0.4rem;">
-        正在录入考核类型：
-        {% for t in exam_types %}
-        {% if t == grade_exam %}<strong>{{ t }}</strong>{% else %}<a href="{{ url_for('score.course_detail', course_id=course.id, exam=t) }}">{{ t }}</a>{% endif %}
-        {% if not loop.last %} · {% endif %}
-        {% endfor %}
-        （切换类型会按该类型已有的分数预填）
-    </p>
-    <form method="post" action="{{ url_for('score.scores_add', course_id=course.id) }}">
-        {{ action_form.hidden_tag() }}
-        <input type="hidden" name="exam_type" value="{{ grade_exam }}">
+        <div class="facts">
+            <div><span class="fact__label">开课学期</span><span class="fact__value">{{ course.semester }}</span></div>
+            <div><span class="fact__label">学分 / 学时</span><span class="fact__value">{{ course.credit }} / {{ course.hours }}</span></div>
+            <div>
+                <span class="fact__label">已选 / 容量</span>
+                <span class="fact__value">
+                    {{ enrolled_count }} / {{ course.capacity if course.capacity > 0 else '不限' }}
+                    {% if remaining is not none %}<span class="muted">（余 {{ remaining }}）</span>{% endif %}
+                </span>
+            </div>
+            <div><span class="fact__label">授课教师</span><span class="fact__value">{{ course.teacher.name if course.teacher else '待安排' }}</span></div>
+            <div><span class="fact__label">当前身份</span><span class="fact__value">{{ role_label }}</span></div>
+        </div>
+
+        <p class="note">
+            {% if is_admin %}你可以把学生加入课程、移出课程或录入修改成绩；<strong>已出成绩的记录不能移出</strong>。
+            {% elif is_teacher %}选课名单对你<strong>只读</strong>，教师不能选课、退课或移人；你可以为选课学生录入或修改成绩。
+            {% else %}你可以退选自己的记录；<strong>已出成绩的课程不能退课</strong>。{% endif %}
+        </p>
+
+        {% if add_form %}
+        <section class="tle-block">
+            <h2 class="tle-block__title">添加学生</h2>
+            {% if add_form.student_id.choices | length > 1 %}
+            <div class="tool-row">
+                <form method="post" action="{{ url_for('score.roster_add', course_id=course.id) }}">
+                    {{ add_form.hidden_tag() }}
+                    <label for="student_id">学生</label>
+                    {{ add_form.student_id() }}
+                    <button class="btn btn-primary btn-sm" type="submit">加入课程</button>
+                </form>
+            </div>
+            <p class="hint">下拉框只列出还没有选这门课的学生；容量已满时会拒绝加入。</p>
+            {% else %}
+            <p class="hint">所有学生都已在这门课的名单里。</p>
+            {% endif %}
+        </section>
         {% endif %}
 
-        <table class="grid">
-            <thead>
-                <tr>
-                    <th>#</th>
-                    <th>学号</th>
-                    <th>姓名</th>
-                    <th>班级</th>
-                    <th>选课时间</th>
-                    <th>成绩（0-100）</th>
-                    {% if g.user.role in ('admin', 'student') %}
-                    <th>操作</th>{% endif %}
-                </tr>
-            </thead>
-            <tbody>
-                {% for e in enrollments %}
-                {% set items = score_map.get(e.id, []) %}
-                {% set my_scores = exam_scores.get(e.id, {}) %}
-                <tr>
-                    <td>{{ loop.index }}</td>
-                    <td><code>{{ e.student.sno if e.student else '—' }}</code></td>
-                    <td>{{ e.student.name if e.student else '—' }}</td>
-                    <td>{{ e.student.class_name if e.student else '—' }}</td>
-                    <td class="hint">{{ e.enrolled_at.strftime('%Y-%m-%d %H:%M') if e.enrolled_at else '—' }}</td>
-                    <td>
-                        {% if can_grade %}
-                        {% set current = my_scores.get(grade_exam) %}
-                        <input type="number" step="0.5" min="0" max="100" name="score_{{ e.id }}" value="{{ current.score if current else '' }}" class="input" style="width: 100px;" placeholder="未录入">
-                        {% set others = [] %}
-                        {% for s in items %}{% if s.exam_type != grade_exam %}{% if others.append(s.exam_type ~ ' ' ~ ('%.1f' | format(s.score) | replace('.0', ''))) %}{% endif %}{% endif %}{% endfor %}
-                        {% if others %}<span class="hint">{{ others | join(' · ') }}</span>{% endif %}
-                        {% else %}
-                        {% if items %}
-                        {% for s in items %}{{ s.exam_type }} {{ s.score }}{% if not loop.last %} · {% endif %}{% endfor %}
-                        {% else %}
-                        <span class="hint">未录入</span>
-                        {% endif %}
-                        {% endif %}
-                    </td>
-                    {% if g.user.role in ('admin', 'student') %}
-                    <td>
-                        {% set can_drop = (g.user.role == 'admin') or (e.id == my_enrollment_id) %}
-                        {% if can_drop %}
-                        {% if items %}
-                        <span class="hint">已有成绩，不可退课</span>
-                        {% else %}
-                        <form class="inline" method="post"
-                              action="{{ url_for('score.drop_enrollment', enrollment_id=e.id) }}"
-                              onsubmit="return confirm('确定把【{{ e.student.name if e.student else '该学生' }}】从课程【{{ course.name }}】中移出吗？');">
-                            {{ action_form.csrf_token }}
-                            <input type="hidden" name="next" value="{{ url_for('score.course_detail', course_id=course.id) }}">
-                            <button class="btn btn-ghost" type="submit">
-                                {% if g.user.role == 'admin' %}移出课程{% else %}退课{% endif %}
-                            </button>
-                        </form>
-                        {% endif %}
-                        {% else %}
-                        <span class="hint">—</span>
-                        {% endif %}
-                    </td>
-                    {% endif %}
-                </tr>
-                {% else %}
-                <tr><td colspan="{{ 7 if g.user.role in ('admin', 'student') else 6 }}" class="hint">这门课还没有人选。</td></tr>
+        <section class="tle-block">
+            <h2 class="tle-block__title">选课名单<span class="muted">（{{ enrollments | length }} 人）</span></h2>
+
+            {% if can_grade and enrollments %}
+            <div class="seg" role="group" aria-label="考核类型">
+                {% for t in exam_types %}
+                {% if t is eq grade_exam %}<span class="seg__item is-active" aria-current="true">{{ t }}</span>{% else %}<a class="seg__item" href="{{ url_for('score.course_detail', course_id=course.id, exam=t) }}">{{ t }}</a>{% endif %}
                 {% endfor %}
-            </tbody>
-        </table>
+            </div>
+            <p class="hint" style="margin: 0 0 16px;">正在录入「{{ grade_exam }}」成绩，切换类型会按该类型已有的分数预填。</p>
 
-        {% if can_grade and enrollments %}
-        <p class="hint">留空表示不修改该生本次考核类型的成绩；保存后可在「平时 / 期中 / 期末」间切换录入。</p>
-        <div style="margin-top: 0.4rem; text-align: right;">
-            <button type="submit" class="btn btn-primary">保存「{{ grade_exam }}」成绩</button>
-        </div>
-    </form>
-    {% endif %}
+            <form id="grade-form" method="post" action="{{ url_for('score.scores_add', course_id=course.id) }}">
+                {{ action_form.hidden_tag() }}
+                <input type="hidden" name="exam_type" value="{{ grade_exam }}">
+            </form>
+            {% endif %}
 
-    {% if can_grade %}
-    <div style="margin-top: 1rem; border-top: 1px solid #dde4ef; padding-top: 0.8rem;">
-        <a class="btn btn-ghost" href="{{ url_for('excel.export_course', course_id=course.id) }}">导出成绩（Excel）</a>
-        <form class="inline" method="post" action="{{ url_for('excel.import_course', course_id=course.id) }}" enctype="multipart/form-data" style="display: inline;">
-            {{ action_form.hidden_tag() }}
-            <input class="input input-inline" type="file" name="file" accept=".xlsx" required>
-            <button class="btn btn-ghost" type="submit">导入成绩（Excel）</button>
-        </form>
-        <span class="hint">导出文件即导入模板；导入按表头回填，留空不修改。</span>
+            {% set drop_ids = [] %}
+            <div class="tle-table-wrapper">
+                <table class="grid">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>学号</th>
+                            <th>姓名</th>
+                            <th>班级</th>
+                            <th>选课时间</th>
+                            <th>成绩（0-100）</th>
+                            {% if has_action_col %}
+                            <th>操作</th>{% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for e in enrollments %}
+                        {% set items = score_map.get(e.id, []) %}
+                        {% set my_scores = exam_scores.get(e.id, {}) %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td><code>{{ e.student.sno if e.student else '—' }}</code></td>
+                            <td>{{ e.student.name if e.student else '—' }}</td>
+                            <td>{{ e.student.class_name if e.student else '—' }}</td>
+                            <td class="hint">{{ e.enrolled_at.strftime('%Y-%m-%d %H:%M') if e.enrolled_at else '—' }}</td>
+                            <td>
+                                {% if can_grade %}
+                                {% set current = my_scores.get(grade_exam) %}
+                                <input class="score-input" form="grade-form" type="number" step="0.5" min="0" max="100"
+                                       name="score_{{ e.id }}" value="{{ current.score if current else '' }}" placeholder="未录入">
+                                {% set others = [] %}
+                                {% for s in items %}{% if s.exam_type is ne grade_exam %}{% if others.append(s.exam_type ~ ' ' ~ ('%.1f' | format(s.score) | replace('.0', ''))) %}{% endif %}{% endif %}{% endfor %}
+                                {% if others %}<span class="hint">{{ others | join(' · ') }}</span>{% endif %}
+                                {% elif items %}
+                                {% for s in items %}{{ s.exam_type }} {{ s.score }}{% if not loop.last %} · {% endif %}{% endfor %}
+                                {% else %}
+                                <span class="hint">未录入</span>
+                                {% endif %}
+                            </td>
+                            {% if has_action_col %}
+                            <td>
+                                {% set can_drop = is_admin or (e.id is eq my_enrollment_id) %}
+                                {% if not can_drop %}
+                                <span class="hint">—</span>
+                                {% elif items %}
+                                <span class="hint">已有成绩，不可退课</span>
+                                {% else %}
+                                {% if drop_ids.append(e.id) %}{% endif %}
+                                <button class="btn btn-danger btn-sm" type="submit" form="drop-{{ e.id }}"
+                                        onclick="return confirm('确定把【{{ e.student.name if e.student else '该学生' }}】从课程【{{ course.name }}】中移出吗？');">
+                                    {{ '移出课程' if is_admin else '退课' }}
+                                </button>
+                                {% endif %}
+                            </td>
+                            {% endif %}
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="{{ 7 if has_action_col else 6 }}" class="empty">这门课还没有人选</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {# 移出 / 退课的表单放在表格外面，避免与成绩表单互相嵌套 #}
+            {% for eid in drop_ids %}
+            <form id="drop-{{ eid }}" method="post" action="{{ url_for('score.drop_enrollment', enrollment_id=eid) }}">
+                {{ action_form.csrf_token }}
+                <input type="hidden" name="next" value="{{ url_for('score.course_detail', course_id=course.id) }}">
+            </form>
+            {% endfor %}
+
+            {% if can_grade and enrollments %}
+            <div class="save-bar">
+                <p class="hint">留空表示不修改该生本次考核类型的成绩。</p>
+                <button type="submit" form="grade-form" class="btn btn-primary">保存「{{ grade_exam }}」成绩</button>
+            </div>
+            {% endif %}
+        </section>
+
+        {% if can_grade %}
+        <section class="tle-block">
+            <h2 class="tle-block__title">Excel 导入导出</h2>
+            <div class="tool-row">
+                <a class="btn btn-ghost btn-sm" href="{{ url_for('excel.export_course', course_id=course.id) }}">导出成绩（Excel）</a>
+                <form method="post" action="{{ url_for('excel.import_course', course_id=course.id) }}" enctype="multipart/form-data">
+                    {{ action_form.hidden_tag() }}
+                    <input type="file" name="file" accept=".xlsx" required>
+                    <button class="btn btn-ghost btn-sm" type="submit">导入成绩（Excel）</button>
+                </form>
+            </div>
+            <p class="hint">导出的文件即导入模板；导入时按表头回填，留空不修改。</p>
+        </section>
+        {% endif %}
+
     </div>
-    {% endif %}
-</section>
-
-<p>
-    <a class="btn btn-ghost" href="{{ back_url }}">返回我的课程</a>
-</p>
+</main>
 {% endblock %}
-
-{% block footer %}R7 — 成绩录入 · R10 — Excel 导入导出（教师和管理员可维护）{% endblock %}

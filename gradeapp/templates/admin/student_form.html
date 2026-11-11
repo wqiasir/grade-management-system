@@ -1,59 +1,39 @@
 {% extends "base.html" %}
+{% from "_macros.html" import page_header, form_row, form_actions %}
 
+{% block page_class %}{% endblock %}
 {% block title %}{{ title }} · {{ system_name }}{% endblock %}
 
 {% block content %}
-<h1>{{ title }}</h1>
+<main class="tle-page">
+    <div class="tle-page__inner tle-page__inner--narrow">
+        {{ page_header('学生管理', title) }}
 
-<section class="card">
-    <form method="post">
-        {{ form.csrf_token }}
+        <form class="tle-form" method="post">
+            {{ form.csrf_token }}
 
-        <div style="margin-bottom: 1rem;">
-            <label for="sno" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">学号 <span style="color: #dc3545;">*</span></label>
-            {{ form.sno(class="input" + (" is-invalid" if form.sno.errors else "")) }}
-            {% for error in form.sno.errors %}
-            <div class="hint" style="color: #dc3545; margin-top: 0.25rem;">{{ error }}</div>
-            {% endfor %}
-        </div>
+            <div class="tle-form__row tle-form__row--2">
+                {{ form_row(form.sno, '学号', true) }}
+                {{ form_row(form.name, '姓名', true) }}
+            </div>
 
-        <div style="margin-bottom: 1rem;">
-            <label for="name" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">姓名 <span style="color: #dc3545;">*</span></label>
-            {{ form.name(class="input" + (" is-invalid" if form.name.errors else "")) }}
-            {% for error in form.name.errors %}
-            <div class="hint" style="color: #dc3545; margin-top: 0.25rem;">{{ error }}</div>
-            {% endfor %}
-        </div>
+            <div class="tle-form__row tle-form__row--3">
+                {{ form_row(form.gender, '性别') }}
+                {{ form_row(form.class_name, '班级') }}
+                {{ form_row(form.enroll_year, '入学年份', type='number', placeholder='例如：2023') }}
+            </div>
 
-        <div style="margin-bottom: 1rem;">
-            <label for="gender" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">性别</label>
-            {{ form.gender(class="input") }}
-        </div>
+            <div class="tle-form__row tle-form__row--2">
+                {{
+ form_row(form.password,
+                    '修改密码' if student else '初始密码',
+                    hint='不填则保持不变' if student else '不填则默认为 123456',
+                    type='password')
+                }}
+            </div>
 
-        <div style="margin-bottom: 1rem;">
-            <label for="class_name" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">班级</label>
-            {{ form.class_name(class="input") }}
-        </div>
-
-        <div style="margin-bottom: 1rem;">
-            <label for="enroll_year" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">入学年份</label>
-            {{ form.enroll_year(class="input", type="number", placeholder="例如：2023") }}
-        </div>
-
-        <div style="margin-bottom: 1.5rem;">
-            <label for="password" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
-                {% if student %}修改密码（不填则保持不变）{% else %}初始密码（不填则默认为 123456）{% endif %}
-            </label>
-            {{ form.password(class="input" + (" is-invalid" if form.password.errors else ""), type="password") }}
-            {% for error in form.password.errors %}
-            <div class="hint" style="color: #dc3545; margin-top: 0.25rem;">{{ error }}</div>
-            {% endfor %}
-        </div>
-
-        <div style="display: flex; gap: 1rem; align-items: center;">
-            <button type="submit" class="btn btn-primary">保存</button>
-            <a href="{{ url_for('admin.student_list') }}" class="btn btn-ghost">返回列表</a>
-        </div>
-    </form>
-</section>
+            {{ form_actions(url_for('admin.student_list')) }}
+        </form>
+    </div>
+</main>
 {% endblock %}

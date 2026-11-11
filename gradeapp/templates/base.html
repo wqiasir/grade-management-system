@@ -1,64 +1,61 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}{{ system_name }}{% endblock %}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}{{ system_name }}{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='portal.css') }}">
+    {% block head %}{% endblock %}
 </head>
 <body>
-  <nav class="topnav">
-    <div class="nav-inner">
-      <a class="brand" href="{{ url_for('index') }}">{{ system_name }}</a>
+    <nav class="site-nav" aria-label="主导航">
+        <div class="site-nav__inner">
+            <a class="site-nav__brand" href="{{ url_for('index') }}">{{ system_name }}</a>
 
-      <ul class="nav-links">
-        {# 导航项由 gradeapp/menu.py 按角色生成；未实现的轮次为灰显占位（无链接） #}
-        {% for item in nav_items %}
-          {% if item.url %}
-            <li><a href="{{ item.url }}">{{ item.label }}</a></li>
-          {% else %}
-            <li><span class="nav-pending" title="{{ item.pending }} 实现">{{ item.label }}</span></li>
-          {% endif %}
-        {% endfor %}
-      </ul>
+            <ul class="site-nav__links">
+                {% for item in nav_items if item.url %}
+                <li>
+                    <a href="{{ item.url }}" {% if request.path == item.url %} aria-current="page" {% endif %}>{{ item.label }}</a>
+                </li>
+                {% endfor %}
+            </ul>
 
-      <div class="nav-user">
-        {% if g.user %}
-          <span class="who">
-            {{ g.user.real_name }}
-            <span class="badge">{{ role_labels.get(g.user.role, g.user.role) }}</span>
-          </span>
-          <form class="inline" method="post" action="{{ url_for('auth.logout') }}">
-            {{ logout_form.hidden_tag() }}
-            <button type="submit" class="btn btn-ghost">退出登录</button>
-          </form>
-        {% else %}
-          <a class="btn btn-primary" href="{{ url_for('auth.login') }}">登录</a>
-        {% endif %}
-      </div>
-    </div>
-  </nav>
+            <div class="site-nav__user">
+                {% if g.user %}
+                <span class="site-nav__who">
+                    <span class="site-nav__name">{{ g.user.real_name }}</span>
+                    <span class="badge">{{ role_labels.get(g.user.role, g.user.role) }}</span>
+                </span>
+                <form class="site-nav__form" method="post" action="{{ url_for('auth.logout') }}">
+                    {{ logout_form.hidden_tag() }}
+                    <button type="submit" class="btn btn-ghost">退出登录</button>
+                </form>
+                {% else %}
+                <a class="btn btn-primary" href="{{ url_for('auth.login') }}">登录</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
 
-  <main class="page">
     {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        <ul class="flashes">
-          {% for category, message in messages %}
-            <li class="flash flash-{{ category }}">{{ message }}</li>
-          {% endfor %}
-        </ul>
-      {% endif %}
+    {% if messages %}
+    <ul class="site-flashes" role="status">
+        {% for category, message in messages %}
+        <li class="site-flash site-flash--{{ category }}">{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
     {% endwith %}
 
-    {% block content %}{% endblock %}
+    <div class="{% block page_class %}page{% endblock %}">
+        {% block content %}{% endblock %}
+    </div>
 
-    <footer>
-      {# 学院名固定在外层，子页面覆写 footer 块时也不会丢掉品牌信息 #}
-      <span class="meta">{{ school_name }}</span> ·
-      {% block footer %}{{ system_name }} · 软件工程课程实践{% endblock %}
+    <footer class="site-footer">
+        {% block footer %}{{ school_name }} · {{ system_name }}{% endblock %}
     </footer>
-  </main>
 
-  {% block scripts %}{% endblock %}
+    {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -1,75 +1,70 @@
 {% extends "base.html" %}
+{% from "_macros.html" import page_header, pager %}
 
+{% block page_class %}{% endblock %}
 {% block title %}教师管理 · {{ system_name }}{% endblock %}
 
 {% block content %}
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-    <h1>教师管理</h1>
-    <a href="{{ url_for('admin.teacher_create') }}" class="btn btn-primary">+ 新增教师</a>
-</div>
+<main class="tle-page">
+    <div class="tle-page__inner">
 
-<p class="meta">
-    共 <strong>{{ teachers|length if teachers is defined else '?' }}</strong> 个教师
-    {% if keyword %} · 关键词：<code>{{ keyword }}</code>{% endif %}
-</p>
+        {% call page_header('教师管理', '教师管理') %}
+        <a href="{{ url_for('admin.teacher_create') }}" class="btn btn-primary">+ 新增教师</a>
+        {% endcall %}
 
-<form class="filter-bar" method="get" action="{{ url_for('admin.teacher_list') }}">
-    <label for="q">搜索</label>
-    <input class="input input-inline" id="q" name="q" type="search" value="{{ keyword }}" placeholder="搜索工号、姓名、职称或学院...">
-    <button class="btn btn-primary" type="submit">搜索</button>
-    <a class="btn btn-ghost" href="{{ url_for('admin.teacher_list') }}">重置</a>
-</form>
+        <p class="tle-page__meta">
+            共 <strong>{{ total if total is defined else teachers|length }}</strong> 个教师
+            {% if pages > 1 %}（第 {{ page }} / {{ pages }} 页）{% endif %}
+            {% if keyword %} · 关键词：<code>{{ keyword }}</code>{% endif %}
+        </p>
 
-<table class="grid">
-    <thead>
-        <tr>
-            <th>工号</th>
-            <th>姓名</th>
-            <th>职称</th>
-            <th>所在学院</th>
-            <th>关联账号状态</th>
-            <th>操作</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for teacher in teachers %}
-        <tr>
-            <td><strong>{{ teacher.tno }}</strong></td>
-            <td>{{ teacher.name }}</td>
-            <td>{{ teacher.title or '—' }}</td>
-            <td>{{ teacher.department or '—' }}</td>
-            <td>
-                {% if teacher.user.is_active %}
-                <span class="yes">正常</span>
-                {% else %}
-                <span class="no">已停用</span>
-                {% endif %}
-            </td>
-            <td>
-                <a class="btn btn-ghost" href="{{ url_for('admin.teacher_edit', teacher_id=teacher.id) }}">编辑</a>
-                <form class="inline" method="post" action="{{ url_for('admin.teacher_delete', teacher_id=teacher.id) }}" onsubmit="return confirm('确定要删除教师【{{ teacher.name }}】及其关联账号吗？此操作不可撤销！');" style="display:inline;">
-                    {{ action_form.csrf_token }}
-                    <button class="btn btn-ghost" type="submit" style="color: #dc3545;">删除</button>
-                </form>
-            </td>
-        </tr>
-        {% else %}
-        <tr>
-            <td colspan="6" class="hint">没有符合条件的教师。</td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+        <form class="filter-bar" method="get" action="{{ url_for('admin.teacher_list') }}">
+            <label for="q">搜索</label>
+            <input id="q" name="q" type="search" value="{{ keyword }}" placeholder="工号、姓名、职称或学院">
+            <button class="btn btn-primary btn-sm" type="submit">搜索</button>
+            <a class="btn btn-ghost btn-sm" href="{{ url_for('admin.teacher_list') }}">重置</a>
+        </form>
 
-{% if pages > 1 %}
-<nav class="pager">
-    {% if page > 1 %}
-    <a href="{{ url_for('admin.teacher_list', q=keyword or None, page=page - 1) }}">上一页</a>
-    {% endif %}
-    <span>第 {{ page }} / {{ pages }} 页</span>
-    {% if page < pages %}
-    <a href="{{ url_for('admin.teacher_list', q=keyword or None, page=page + 1) }}">下一页</a>
-    {% endif %}
-</nav>
-{% endif %}
+        <div class="tle-table-wrapper">
+            <table class="grid">
+                <thead>
+                    <tr>
+                        <th>工号</th>
+                        <th>姓名</th>
+                        <th>职称</th>
+                        <th>所在学院</th>
+                        <th>账号状态</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for teacher in teachers %}
+                    <tr>
+                        <td><strong>{{ teacher.tno }}</strong></td>
+                        <td>{{ teacher.name }}</td>
+                        <td>{{ teacher.title or '—' }}</td>
+                        <td>{{ teacher.department or '—' }}</td>
+                        <td>{% if teacher.user.is_active %}<span class="yes">正常</span>{% else %}<span class="no">已停用</span>{% endif %}</td>
+                        <td>
+                            <div class="row-actions">
+                                <a class="btn btn-ghost btn-sm" href="{{ url_for('admin.teacher_edit', teacher_id=teacher.id) }}">编辑</a>
+                                <form class="inline" method="post" action="{{ url_for('admin.teacher_delete', teacher_id=teacher.id) }}"
+                                      onsubmit="return confirm('确定要删除教师【{{ teacher.name }}】及其关联账号吗？此操作不可撤销！');">
+                                    {{ action_form.csrf_token }}
+                                    <button class="btn btn-danger btn-sm" type="submit">删除</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="6" class="empty">没有符合条件的教师</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {{ pager(page, pages, 'admin.teacher_list', q=keyword or None) }}
+
+    </div>
+</main>
 {% endblock %}

@@ -1,160 +1,717 @@
 {% extends "base.html" %}
 
+{# 首页自带整页布局，不使用 base 的 .page 内边距容器 #}
+{% block page_class %}{% endblock %}
+
 {% block title %}首页 · {{ system_name }}{% endblock %}
 
 {% block content %}
-<h1>{{ system_name }}</h1>
-<p class="meta">{{ school_name }}</p>
-<p class="ok">系统已启动</p>
-<p class="meta">
-  版本 {{ version }} ·
-  数据库 <code>{{ db_path }}</code>
-</p>
+<style>
+     /* ==========================================================
+    首页布局：左侧竖排标题栏 + 右侧内容区
+    所有规则限定在 .tle-main 之下，不影响导航栏和页脚
+    ========================================================== */
 
-{# ---------- R3：按角色渲染的首页（三种角色看到不同内容） ---------- #}
-{% if g.user and g.user.role == 'admin' %}
-<section class="card">
-  <h2>管理员首页 · 账号与基础数据</h2>
-  <div class="stat-grid">
-    <div class="stat"><span class="stat-num">{{ stats.user }}</span><span class="stat-label">账号总数</span></div>
-    <div class="stat"><span class="stat-num">{{ stats.active_user }}</span><span class="stat-label">启用中账号</span></div>
-    <div class="stat"><span class="stat-num">{{ stats.student }}</span><span class="stat-label">学生</span></div>
-    <div class="stat"><span class="stat-num">{{ stats.teacher }}</span><span class="stat-label">教师</span></div>
-    <div class="stat"><span class="stat-num">{{ stats.course }}</span><span class="stat-label">课程</span></div>
-    <div class="stat"><span class="stat-num">{{ stats.enrollment }}</span><span class="stat-label">选课记录</span></div>
-    <div class="stat"><span class="stat-num">{{ stats.score }}</span><span class="stat-label">成绩记录</span></div>
-  </div>
-  <p>
-    <a class="btn btn-primary" href="{{ url_for('admin.user_list') }}">进入账号管理</a>
-    <a class="btn btn-ghost" href="{{ url_for('admin.dashboard') }}">账号总览</a>
-    <a class="btn btn-ghost" href="{{ url_for('report.overview') }}">统计报表</a>
-  </p>
-</section>
+     .tle-main {
+         --tle-spot: 0, 50, 189;
+         --tle-text: 0, 0, 0;
+         --tle-gutter-w: 0px;
+         --tle-top: 20px;
+         position: relative;
+         margin-top: 0;
+         padding-top: var(--tle-top);
+         overflow: hidden;
+         min-height: calc(100vh - 60px);
+         font-family: "Helvetica Neue", Helvetica, Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+         font-size: 15.1113px;
+         font-weight: 400;
+         line-height: 1.6;
+         color: rgb(var(--tle-text));
+         background: #fff;
+         -webkit-font-smoothing: antialiased;
+     }
 
-<section class="card">
-  <h2>最近创建的账号</h2>
-  <table class="grid">
-    <thead><tr><th>ID</th><th>用户名</th><th>姓名</th><th>角色</th><th>状态</th></tr></thead>
-    <tbody>
-      {% for u in recent %}
-      <tr>
-        <td>{{ u.id }}</td>
-        <td><code>{{ u.username }}</code></td>
-        <td>{{ u.real_name }}</td>
-        <td><span class="badge">{{ role_labels.get(u.role, u.role) }}</span></td>
-        <td>{% if u.is_active %}<span class="yes">启用</span>{% else %}<span class="no">已停用</span>{% endif %}</td>
-      </tr>
-      {% else %}
-      <tr><td colspan="5" class="hint">还没有账号，执行 <code>flask seed</code> 生成演示账号。</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</section>
+     @media (min-width: 720px) and (min-height: 500px) {
+         .tle-main {
+             --tle-gutter-w: 78px;
+             padding-left: 78px;
+             min-height: calc(100vh - 78px);
+         }
+     }
 
-{% elif g.user and g.user.role == 'teacher' %}
-<section class="card">
-  <h2>教师首页 · 我的授课情况</h2>
-  <div class="stat-grid">
-    <div class="stat"><span class="stat-num">{{ stats.course }}</span><span class="stat-label">授课课程</span></div>
-    <div class="stat"><span class="stat-num">{{ stats.student }}</span><span class="stat-label">选课学生</span></div>
-    <div class="stat"><span class="stat-num">{{ stats.graded }}</span><span class="stat-label">已录成绩条数</span></div>
-  </div>
-  <p>
-    <a class="btn btn-primary" href="{{ url_for('score.my_courses') }}">查看我的课程</a>
-    <a class="btn btn-ghost" href="{{ url_for('report.overview') }}">本课统计</a>
-  </p>
-  <p class="hint">成绩录入（R7）与 Excel 导入（R10）将在后续轮次开放。</p>
-</section>
+     @media (min-width: 990px) and (min-height: 650px) {
+         .tle-main {
+             --tle-gutter-w: 84px;
+             padding-left: 84px;
+             min-height: calc(100vh - 84px);
+         }
+     }
 
-<section class="card">
-  <h2>我的课程</h2>
-  <table class="grid">
-    <thead><tr><th>课程代码</th><th>课程名称</th><th>学期</th><th>选课人数</th><th>已录成绩</th></tr></thead>
-    <tbody>
-      {% for row in course_rows %}
-      <tr>
-        <td><code>{{ row.course.code }}</code></td>
-        <td><a href="{{ url_for('score.course_detail', course_id=row.course.id) }}">{{ row.course.name }}</a></td>
-        <td>{{ row.course.semester }}</td>
-        <td>{{ row.enrolled }} / {{ row.course.capacity }}</td>
-        <td>{{ row.graded }}</td>
-      </tr>
-      {% else %}
-      <tr><td colspan="5" class="hint">你名下还没有课程（由管理员在 R5 排课）。</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</section>
+     @media (min-width: 720px) {
+         .tle-main {
+             --tle-top: 60px;
+         }
+     }
 
-{% elif g.user and g.user.role == 'student' %}
-<section class="card">
-  <h2>学生首页 · 我的选课</h2>
-  <div class="stat-grid">
-    <div class="stat"><span class="stat-num">{{ enrolled_mine }}</span><span class="stat-label">已选课程</span></div>
-    <div class="stat"><span class="stat-num">{{ graded_mine }}</span><span class="stat-label">已出成绩条数</span></div>
-  </div>
-  <p>
-    <a class="btn btn-primary" href="{{ url_for('score.my_courses') }}">查看我的课程</a>
-    <a class="btn btn-ghost" href="{{ url_for('report.overview') }}">我的成绩概览</a>
-  </p>
-  <p class="hint">自主选课（R6）与成绩单（R8）将在后续轮次开放。</p>
-</section>
+     @media (min-width: 1350px) {
+         .tle-main {
+             --tle-top: 90px;
+         }
+     }
 
-<section class="card">
-  <h2>我的课程</h2>
-  <table class="grid">
-    <thead><tr><th>课程代码</th><th>课程名称</th><th>授课教师</th><th>学期</th><th>学分</th></tr></thead>
-    <tbody>
-      {% for row in course_rows %}
-      <tr>
-        <td><code>{{ row.course.code }}</code></td>
-        <td><a href="{{ url_for('score.course_detail', course_id=row.course.id) }}">{{ row.course.name }}</a></td>
-        <td>{{ row.course.teacher.name if row.course.teacher else '待安排' }}</td>
-        <td>{{ row.course.semester }}</td>
-        <td>{{ row.course.credit }}</td>
-      </tr>
-      {% else %}
-      <tr><td colspan="5" class="hint">你还没有选课（自主选课在 R6 开放）。</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</section>
-{% endif %}
+     @media (min-width: 1100px) {
+         .tle-main {
+             font-size: 17px;
+         }
+     }
 
-<section class="card">
-  <h2>当前登录状态</h2>
-  {% if g.user %}
-    <p>
-      已登录：<strong>{{ g.user.real_name }}</strong>
-      <span class="badge">{{ role_labels.get(g.user.role, g.user.role) }}</span>
-      <span class="meta">（用户名 <code>{{ g.user.username }}</code>）</span>
-    </p>
-    <p class="hint">会话已保持，刷新页面或重新打开浏览器仍处于登录状态；点击右上角"退出登录"结束会话。</p>
-  {% else %}
-    <p>当前为 <strong>未登录</strong> 状态，请先 <a href="{{ url_for('auth.login') }}">登录</a>。</p>
-    <p class="hint">演示账号见登录页；亦可执行 <code>flask seed</code> 生成种子账号。</p>
-  {% endif %}
-</section>
+     .tle-container {
+         margin: 0 auto;
+         max-width: 1380px;
+     }
 
-<h2>数据表（共 {{ tables | length }} 张）</h2>
-<table class="grid">
-  <thead>
-    <tr><th>表名</th><th>状态</th><th>记录数</th></tr>
-  </thead>
-  <tbody>
-    {% for t in tables %}
-    <tr>
-      <td><code>{{ t.name }}</code></td>
-      <td>{% if t.built %}<span class="yes">已建表</span>{% else %}<span class="no">未建表</span>{% endif %}</td>
-      <td>{{ t.rows if t.rows is not none else '—' }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+     .tle-main *, .tle-main *::before, .tle-main *::after {
+         box-sizing: border-box;
+     }
 
-{% if tables | rejectattr('built') | list %}
-<p class="hint">还有表未创建，请先执行 <code>flask init-db</code>。</p>
-{% endif %}
+     /* ---------- 左侧竖排标题栏 ---------- */
+     .tle-gutter__title {
+         display: none;
+         margin: 0;
+     }
+
+     @media (min-width: 720px) and (min-height: 500px) {
+         .tle-gutter {
+             position: absolute;
+             top: var(--tle-top);
+             left: var(--tle-gutter-w);
+             width: 0;
+         }
+
+         .tle-gutter__title {
+             display: block;
+             position: absolute;
+             top: 0;
+             left: 0;
+             font-weight: 400;
+             font-size: calc(22.661px + 11.339 * (100vw - 720px) / 380);
+             line-height: 78px;
+             white-space: nowrap;
+             transform-origin: 0 0;
+             transform: rotate(90deg);
+         }
+     }
+
+     @media (min-width: 990px) and (min-height: 650px) {
+         .tle-gutter__title {
+             line-height: 84px;
+         }
+     }
+
+     @media (min-width: 1100px) and (min-height: 500px) {
+         .tle-gutter__title {
+             font-size: 34px;
+         }
+     }
+
+     .tle-gutter__bg {
+         display: none;
+     }
+
+     @media (min-width: 720px) and (min-height: 500px) {
+         .tle-gutter__bg {
+             display: block;
+             position: fixed;
+             top: 0;
+             bottom: 0;
+             left: -1px;
+             width: 78px;
+             border-right: 1px solid rgba(var(--tle-text), .1);
+             pointer-events: none;
+         }
+     }
+
+     @media (min-width: 990px) and (min-height: 650px) {
+         .tle-gutter__bg {
+             width: 84px;
+         }
+     }
+
+     /* ---------- 内容区 ---------- */
+     .tle-padding {
+         padding-left: 5px;
+         padding-right: 5px;
+     }
+
+     @media (min-width: 720px) and (min-height: 500px) {
+         .tle-padding {
+             padding-left: 34px;
+             padding-right: 68px;
+         }
+     }
+
+     @media (min-width: 990px) and (min-height: 650px) {
+         .tle-padding {
+             padding-left: 74px;
+             padding-right: 74px;
+         }
+     }
+
+     .tle-content-mod {
+         padding-bottom: 60px;
+     }
+
+     @media (min-width: 720px) and (min-height: 500px) {
+         .tle-content-mod {
+             padding-bottom: 78px;
+         }
+     }
+
+     @media (min-width: 990px) and (min-height: 650px) {
+         .tle-content-mod {
+             padding-bottom: 84px;
+         }
+     }
+
+     /* ---------- 标题 ---------- */
+     .tle-main h1, .tle-main h2 {
+         line-height: 1.1;
+         margin: 0;
+     }
+
+     .tle-title-primary {
+         font-size: 47.2226px;
+         font-weight: 600;
+         margin: 0 0 20px;
+     }
+
+     .tle-section__title {
+         font-size: 22.661px;
+         font-weight: 400;
+     }
+
+     @media (min-width: 720px) and (max-width: 1099px) {
+         .tle-section__title {
+             font-size: calc(22.661px + 11.339 * (100vw - 720px) / 380);
+         }
+     }
+
+     @media (min-width: 1100px) {
+         .tle-section__title {
+             font-size: 34px;
+         }
+     }
+
+     /* ---------- 页面头部 ---------- */
+     .tle-header {
+         display: flex;
+         flex-wrap: wrap;
+         align-items: flex-start;
+         margin-bottom: 30px;
+     }
+
+     @media (min-width: 1100px) {
+         .tle-header {
+             margin-bottom: 40px;
+         }
+     }
+
+     .tle-header__intro {
+         width: 100%;
+         padding: 0 10px;
+     }
+
+     @media (min-width: 770px) {
+         .tle-header__intro {
+             width: 83.33333%;
+         }
+     }
+
+     @media (min-width: 1100px) {
+         .tle-header__intro {
+             width: 75%;
+         }
+     }
+
+     .tle-header__intro-text {
+         margin: 0;
+         font-weight: 400;
+         line-height: 1.3;
+         font-size: 20.661px;
+     }
+
+     @media (min-width: 720px) and (max-width: 1499px) {
+         .tle-header__intro-text {
+             font-size: calc(20.661px + 13.339 * (100vw - 720px) / 780);
+         }
+     }
+
+     @media (min-width: 1500px) {
+         .tle-header__intro-text {
+             font-size: 34px;
+         }
+     }
+
+     .tle-header__intro-text strong {
+         font-weight: 600;
+         color: rgb(var(--tle-spot));
+     }
+
+     .tle-meta-tag {
+         margin-top: 20px;
+         font-size: 14px;
+         line-height: 1.5;
+         color: rgba(var(--tle-text), .6);
+     }
+
+     /* ---------- 分区 ---------- */
+     .tle-section {
+         margin-top: 60px;
+         margin-left: -90px;
+         padding-left: 90px;
+         border-top: 1px solid rgba(var(--tle-text), .1);
+     }
+
+     @media (min-width: 1100px) {
+         .tle-section {
+             margin-top: 80px;
+         }
+     }
+
+     .tle-section__inner {
+         display: flex;
+         flex-wrap: wrap;
+         align-items: flex-start;
+     }
+
+     .tle-section__header {
+         width: 100%;
+         padding: 0 10px;
+         margin-bottom: 20px;
+     }
+
+     @media (min-width: 1100px) {
+         .tle-section__header {
+             margin-bottom: 30px;
+         }
+     }
+
+     .tle-section__title {
+         display: inline-block;
+         margin-top: -1px;
+         padding-top: 30px;
+         border-top: 3px solid rgb(var(--tle-spot));
+     }
+
+     .tle-section__content {
+         width: 100%;
+         padding: 0 10px;
+         margin-top: 0;
+     }
+
+     @media (min-width: 770px) {
+         .tle-section__content--narrow {
+             width: 83.33333%;
+         }
+     }
+
+     @media (min-width: 1100px) {
+         .tle-section__content--narrow {
+             width: 50%;
+         }
+     }
+
+     .tle-body-text {
+         font-size: 15.1113px;
+         line-height: 1.6;
+         margin: 0 0 12px;
+     }
+
+     @media (min-width: 1100px) {
+         .tle-body-text {
+             font-size: 17px;
+         }
+     }
+
+     /* ---------- 链接 ---------- */
+     .tle-main a:not(.btn) {
+         color: rgb(var(--tle-text));
+         text-decoration: none;
+         background: linear-gradient(180deg, transparent calc(100% - 1px), rgb(var(--tle-spot)) 0);
+     }
+
+         .tle-main a:not(.btn):hover,
+         .tle-main a:not(.btn):focus {
+             color: rgb(var(--tle-spot));
+         }
+
+     .tle-main a:focus-visible,
+     .tle-main .btn:focus-visible {
+         outline: 3px solid rgb(var(--tle-spot));
+         outline-offset: 3px;
+     }
+
+     /* ---------- 统计数字 ---------- */
+     .stat-grid {
+         display: grid;
+         grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+         gap: 0 30px;
+         margin-bottom: 30px;
+     }
+
+     .tle-main .stat {
+         display: flex;
+         flex-direction: column;
+         padding: 16px 0 20px;
+         border-top: 1px solid rgba(var(--tle-text), .1);
+     }
+
+     .tle-main .stat-num {
+         font-size: 47.2226px;
+         font-weight: 600;
+         line-height: 1.1;
+         font-variant-numeric: tabular-nums;
+     }
+
+     .tle-main .stat-label {
+         margin-top: 6px;
+         font-size: 14px;
+         color: rgba(var(--tle-text), .6);
+     }
+
+     /* ---------- 按钮 ---------- */
+     .tle-actions {
+         display: flex;
+         flex-wrap: wrap;
+         gap: 12px;
+         margin-bottom: 20px;
+     }
+
+     .tle-main .btn {
+         display: inline-block;
+         padding: 10px 22px;
+         border: 2px solid rgb(var(--tle-spot));
+         border-radius: 0;
+         font-size: 15px;
+         font-weight: 500;
+         line-height: 1.3;
+         text-decoration: none;
+         cursor: pointer;
+         transition: background-color .15s, color .15s;
+     }
+
+     .tle-main .btn-primary {
+         background: rgb(var(--tle-spot));
+         color: #fff;
+     }
+
+         .tle-main .btn-primary:hover {
+             background: #fff;
+             color: rgb(var(--tle-spot));
+         }
+
+     .tle-main .btn-ghost {
+         background: transparent;
+         color: rgb(var(--tle-spot));
+     }
+
+         .tle-main .btn-ghost:hover {
+             background: rgb(var(--tle-spot));
+             color: #fff;
+         }
+
+     /* ---------- 表格 ---------- */
+     .tle-table-wrapper {
+         width: 100%;
+         overflow-x: auto;
+     }
+
+     .tle-main table.grid {
+         width: 100%;
+         border-collapse: collapse;
+         font-size: 15px;
+     }
+
+         .tle-main table.grid th {
+             padding: 10px 16px 10px 0;
+             text-align: left;
+             font-weight: 600;
+             white-space: nowrap;
+             border-bottom: 2px solid rgb(var(--tle-text));
+         }
+
+         .tle-main table.grid td {
+             padding: 12px 16px 12px 0;
+             vertical-align: top;
+             border-bottom: 1px solid rgba(var(--tle-text), .1);
+         }
+
+         .tle-main table.grid tbody tr:hover td {
+             background: rgba(var(--tle-spot), .04);
+         }
+
+     /* ---------- 徽标 / 状态 / 备注 ---------- */
+     .tle-main .badge {
+         display: inline-block;
+         padding: 1px 8px;
+         border: 1px solid rgb(var(--tle-spot));
+         font-size: 13px;
+         line-height: 1.5;
+         color: rgb(var(--tle-spot));
+     }
+
+     .tle-main .yes {
+         color: #006630;
+         font-weight: 600;
+     }
+
+     .tle-main .no {
+         color: #c00;
+         font-weight: 600;
+     }
+
+     .tle-main .empty {
+         padding: 24px 0;
+         color: rgba(var(--tle-text), .6);
+     }
+
+     .tle-main .meta {
+         color: rgba(var(--tle-text), .6);
+     }
+
+     .tle-main code {
+         padding: 1px 5px;
+         background: rgba(var(--tle-text), .06);
+         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+         font-size: .88em;
+     }
+
+     @media (prefers-reduced-motion: reduce) {
+         .tle-main .btn {
+             transition: none;
+         }
+     }
+</style>
+
+<main class="tle-main">
+    <div class="tle-container">
+
+        <div class="tle-gutter-container">
+            <aside class="tle-gutter">
+                <h2 class="tle-gutter__title">ACADEMIC PORTAL</h2>
+            </aside>
+            <div class="tle-gutter__bg"></div>
+        </div>
+
+        <div class="tle-content-mod">
+
+            <header class="tle-header tle-padding">
+                <div class="tle-header__intro">
+                    <h1 class="tle-title-primary">{{ system_name }}</h1>
+                    {% if g.user %}
+                    <p class="tle-header__intro-text">
+                        {{ g.user.real_name }}，欢迎回来
+                    </p>
+                    <div class="tle-meta-tag">
+                        <span>{{ school_name }}</span>
+                        <span class="tle-separator">·</span>
+                        <span class="badge">{{ role_labels.get(g.user.role, g.user.role) }}</span>
+                    </div>
+                    {% else %}
+                    <p class="tle-header__intro-text">
+                        {{ school_name }}，请 <a href="{{ url_for('auth.login') }}">登录</a> 后使用
+                    </p>
+                    {% endif %}
+                </div>
+            </header>
+
+            {% if g.user and g.user.role == 'admin' %}
+            <section class="tle-section">
+                <div class="tle-padding">
+                    <div class="tle-section__inner">
+                        <div class="tle-section__header">
+                            <h2 class="tle-section__title">数据概览</h2>
+                        </div>
+                        <div class="tle-section__content">
+                            <div class="stat-grid">
+                                <div class="stat"><span class="stat-num">{{ stats.user }}</span><span class="stat-label">账号总数</span></div>
+                                <div class="stat"><span class="stat-num">{{ stats.active_user }}</span><span class="stat-label">启用中账号</span></div>
+                                <div class="stat"><span class="stat-num">{{ stats.student }}</span><span class="stat-label">学生</span></div>
+                                <div class="stat"><span class="stat-num">{{ stats.teacher }}</span><span class="stat-label">教师</span></div>
+                                <div class="stat"><span class="stat-num">{{ stats.course }}</span><span class="stat-label">课程</span></div>
+                                <div class="stat"><span class="stat-num">{{ stats.enrollment }}</span><span class="stat-label">选课记录</span></div>
+                                <div class="stat"><span class="stat-num">{{ stats.score }}</span><span class="stat-label">成绩记录</span></div>
+                            </div>
+                            <div class="tle-actions">
+                                <a class="btn btn-primary" href="{{ url_for('admin.user_list') }}">账号管理</a>
+                                <a class="btn btn-ghost" href="{{ url_for('admin.dashboard') }}">账号总览</a>
+                                <a class="btn btn-ghost" href="{{ url_for('report.overview') }}">统计报表</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="tle-section">
+                <div class="tle-padding">
+                    <div class="tle-section__inner">
+                        <div class="tle-section__header">
+                            <h2 class="tle-section__title">最近创建的账号</h2>
+                        </div>
+                        <div class="tle-section__content">
+                            <div class="tle-table-wrapper">
+                                <table class="grid">
+                                    <thead>
+                                        <tr><th>ID</th><th>用户名</th><th>姓名</th><th>角色</th><th>状态</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for u in recent %}
+                                        <tr>
+                                            <td>{{ u.id }}</td>
+                                            <td><code>{{ u.username }}</code></td>
+                                            <td>{{ u.real_name }}</td>
+                                            <td><span class="badge">{{ role_labels.get(u.role, u.role) }}</span></td>
+                                            <td>{% if u.is_active %}<span class="yes">启用</span>{% else %}<span class="no">已停用</span>{% endif %}</td>
+                                        </tr>
+                                        {% else %}
+                                        <tr><td colspan="5" class="empty">暂无账号记录</td></tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {% elif g.user and g.user.role == 'teacher' %}
+            <section class="tle-section">
+                <div class="tle-padding">
+                    <div class="tle-section__inner">
+                        <div class="tle-section__header">
+                            <h2 class="tle-section__title">我的授课情况</h2>
+                        </div>
+                        <div class="tle-section__content">
+                            <div class="stat-grid">
+                                <div class="stat"><span class="stat-num">{{ stats.course }}</span><span class="stat-label">授课课程</span></div>
+                                <div class="stat"><span class="stat-num">{{ stats.student }}</span><span class="stat-label">选课学生</span></div>
+                                <div class="stat"><span class="stat-num">{{ stats.graded }}</span><span class="stat-label">已录成绩</span></div>
+                            </div>
+                            <div class="tle-actions">
+                                <a class="btn btn-primary" href="{{ url_for('score.my_courses') }}">我的课程</a>
+                                <a class="btn btn-ghost" href="{{ url_for('report.overview') }}">成绩统计</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="tle-section">
+                <div class="tle-padding">
+                    <div class="tle-section__inner">
+                        <div class="tle-section__header">
+                            <h2 class="tle-section__title">我的课程</h2>
+                        </div>
+                        <div class="tle-section__content">
+                            <div class="tle-table-wrapper">
+                                <table class="grid">
+                                    <thead>
+                                        <tr><th>课程代码</th><th>课程名称</th><th>学期</th><th>选课人数</th><th>已录成绩</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for row in course_rows %}
+                                        <tr>
+                                            <td><code>{{ row.course.code }}</code></td>
+                                            <td><a href="{{ url_for('score.course_detail', course_id=row.course.id) }}">{{ row.course.name }}</a></td>
+                                            <td>{{ row.course.semester }}</td>
+                                            <td>{{ row.enrolled }} / {{ row.course.capacity }}</td>
+                                            <td>{{ row.graded }}</td>
+                                        </tr>
+                                        {% else %}
+                                        <tr><td colspan="5" class="empty">本学期暂无授课安排</td></tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {% elif g.user and g.user.role == 'student' %}
+            <section class="tle-section">
+                <div class="tle-padding">
+                    <div class="tle-section__inner">
+                        <div class="tle-section__header">
+                            <h2 class="tle-section__title">我的选课</h2>
+                        </div>
+                        <div class="tle-section__content">
+                            <div class="stat-grid">
+                                <div class="stat"><span class="stat-num">{{ enrolled_mine }}</span><span class="stat-label">已选课程</span></div>
+                                <div class="stat"><span class="stat-num">{{ graded_mine }}</span><span class="stat-label">已出成绩</span></div>
+                            </div>
+                            <div class="tle-actions">
+                                <a class="btn btn-primary" href="{{ url_for('score.my_courses') }}">我的课程</a>
+                                <a class="btn btn-ghost" href="{{ url_for('report.overview') }}">成绩概览</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="tle-section">
+                <div class="tle-padding">
+                    <div class="tle-section__inner">
+                        <div class="tle-section__header">
+                            <h2 class="tle-section__title">我的课程</h2>
+                        </div>
+                        <div class="tle-section__content">
+                            <div class="tle-table-wrapper">
+                                <table class="grid">
+                                    <thead>
+                                        <tr><th>课程代码</th><th>课程名称</th><th>授课教师</th><th>学期</th><th>学分</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for row in course_rows %}
+                                        <tr>
+                                            <td><code>{{ row.course.code }}</code></td>
+                                            <td><a href="{{ url_for('score.course_detail', course_id=row.course.id) }}">{{ row.course.name }}</a></td>
+                                            <td>{{ row.course.teacher.name if row.course.teacher else '待安排' }}</td>
+                                            <td>{{ row.course.semester }}</td>
+                                            <td>{{ row.course.credit }}</td>
+                                        </tr>
+                                        {% else %}
+                                        <tr><td colspan="5" class="empty">你还没有选课</td></tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {% else %}
+            <section class="tle-section">
+                <div class="tle-padding">
+                    <div class="tle-section__inner">
+                        <div class="tle-section__header">
+                            <h2 class="tle-section__title">欢迎使用</h2>
+                        </div>
+                        <div class="tle-section__content tle-section__content--narrow">
+                            <p class="tle-body-text">
+                                本系统提供课程管理、成绩录入与统计查询服务。请使用学校分配的账号登录。
+                            </p>
+                            <div class="tle-actions">
+                                <a class="btn btn-primary" href="{{ url_for('auth.login') }}">登录</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            {% endif %}
+
+        </div>
+    </div>
+</main>
 {% endblock %}
-
-{% block footer %}R3 — 角色权限控制（RBAC）{% endblock %}

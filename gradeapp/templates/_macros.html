@@ -1,0 +1,46 @@
+﻿{# ==========================================================
+   共用模板组件。在页面顶部这样引入：
+   {% from "_macros.html" import page_header, form_row, form_actions, pager %}
+   ========================================================== #}
+
+{# 页面标题：小标题 + 大标题；用 {% call %} 可在右侧放操作按钮 #}
+{% macro page_header(eyebrow, title) %}
+<header class="tle-page__head">
+    <div>
+        <p class="tle-page__eyebrow">{{ eyebrow }}</p>
+        <h1 class="tle-page__title">{{ title }}</h1>
+    </div>
+    {% if caller %}<div class="tle-page__tools">{{ caller() }}</div>{% endif %}
+</header>
+{% endmacro %}
+
+{# 表单字段：标签 + 控件 + 错误提示 + 可选说明；额外参数原样传给控件 #}
+{% macro form_row(field, label, required=false, hint='') %}
+<div class="tle-form__field{% if field.errors %} has-error{% endif %}">
+    <label for="{{ field.id }}">{{ label }}{% if required %}<span class="tle-form__req" aria-hidden="true">*</span>{% endif %}</label>
+    {{ field(**kwargs) }}
+    {% for error in field.errors %}
+    <p class="tle-form__error">{{ error }}</p>
+    {% endfor %}
+    {% if hint %}<p class="tle-form__hint">{{ hint }}</p>{% endif %}
+</div>
+{% endmacro %}
+
+{# 表单底部：保存 + 返回列表 #}
+{% macro form_actions(back_url, back_label='返回列表') %}
+<div class="tle-form__actions">
+    <button type="submit" class="btn btn-primary">保存</button>
+    <a href="{{ back_url }}" class="btn btn-ghost">{{ back_label }}</a>
+</div>
+{% endmacro %}
+
+{# 分页：额外参数（如 q=、role=）会带进上一页 / 下一页链接 #}
+{% macro pager(page, pages, endpoint) %}
+{% if pages > 1 %}
+<nav class="pager" aria-label="分页">
+    {% if page > 1 %}<a href="{{ url_for(endpoint, page=page - 1, **kwargs) }}">上一页</a>{% endif %}
+    <span>第 {{ page }} / {{ pages }} 页</span>
+    {% if page < pages %}<a href="{{ url_for(endpoint, page=page + 1, **kwargs) }}">下一页</a>{% endif %}
+</nav>
+{% endif %}
+{% endmacro %}
