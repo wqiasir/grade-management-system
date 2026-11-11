@@ -8,86 +8,60 @@
 <main class="tle-page">
     <div class="tle-page__inner">
 
-        {% call page_header('统计报表', '成绩与课程数据概览') %}
-        {% endcall %}
+        {{ page_header('成绩', '统计报表') }}
 
-        <div class="facts">
-            <div>
-                <span class="fact__label">当前身份</span>
-                <span class="fact__value">{{ role_label }}</span>
-            </div>
-            <div>
-                <span class="fact__label">数据范围</span>
-                <span class="fact__value">{{ scope_hint }}</span>
-            </div>
-            <div>
-                <span class="fact__label">及格线</span>
-                <span class="fact__value">{{ summary.pass_score }} 分</span>
-            </div>
-            <div>
-                <span class="fact__label">课程数</span>
-                <span class="fact__value">{{ summary.courses }}</span>
-            </div>
-            <div>
-                <span class="fact__label">学生数</span>
-                <span class="fact__value">{{ summary.students }}</span>
-            </div>
-            <div>
-                <span class="fact__label">教师数</span>
-                <span class="fact__value">{{ summary.teachers }}</span>
-            </div>
-            <div>
-                <span class="fact__label">成绩条数</span>
-                <span class="fact__value">{{ summary.graded }}</span>
-            </div>
-            <div>
-                <span class="fact__label">平均分</span>
-                <span class="fact__value">{{ summary.average if summary.average is not none else '—' }}</span>
-            </div>
-            <div>
-                <span class="fact__label">及格率</span>
-                <span class="fact__value">{{ summary.pass_rate }}%</span>
-            </div>
-        </div>
-
-        <p class="note">
-            统计口径：平均分为已录入成绩的算术平均（保留 2 位）；及格率为成绩不低于
-            {{ summary.pass_score }} 分的条数占成绩总条数的比例（保留 1 位）。
-            没有成绩的课程不计入平均分样本，及格率按 0% 显示。
+        <p class="tle-page__meta">
+            当前身份：<span class="badge">{{ role_label }}</span> ·
+            数据范围：<strong>{{ scope_hint }}</strong> ·
+            及格线：<strong>{{ summary.pass_score }}</strong> 分
         </p>
+
+        <section class="tle-block">
+            <h2 class="tle-block__title">汇总</h2>
+            <div class="stat-grid">
+                <div class="stat"><span class="stat-num">{{ summary.courses }}</span><span class="stat-label">课程数</span></div>
+                <div class="stat"><span class="stat-num">{{ summary.students }}</span><span class="stat-label">学生数</span></div>
+                <div class="stat"><span class="stat-num">{{ summary.teachers }}</span><span class="stat-label">教师数</span></div>
+                <div class="stat"><span class="stat-num">{{ summary.graded }}</span><span class="stat-label">成绩条数</span></div>
+                <div class="stat">
+                    <span class="stat-num">{{ summary.average if summary.average is not none else '—' }}</span>
+                    <span class="stat-label">平均分</span>
+                </div>
+                <div class="stat"><span class="stat-num">{{ summary.pass_rate }}%</span><span class="stat-label">及格率</span></div>
+            </div>
+            <p class="hint">
+                平均分为已录入成绩的算术平均（保留 2 位）；及格率为成绩不低于 {{ summary.pass_score }} 分的条数占成绩总条数的比例（保留 1 位）。
+                没有成绩的课程不计入平均分，及格率显示为 0%。
+            </p>
+        </section>
 
         <section class="tle-block">
             <h2 class="tle-block__title">课程明细<span class="muted">（{{ course_stats | length }} 门）</span></h2>
             <div class="tle-table-wrapper">
                 <table class="grid">
                     <thead>
-                        <tr>
-                            <th>课程</th>
-                            <th>学期</th>
-                            <th>选课人数</th>
-                            <th>成绩条数</th>
-                            <th>平均分</th>
-                            <th>及格率</th>
-                        </tr>
+                        <tr><th>课程</th><th>学期</th><th>选课人数</th><th>成绩条数</th><th>平均分</th><th>及格率</th></tr>
                     </thead>
                     <tbody>
                         {% for row in course_stats %}
                         <tr>
                             <td>
                                 <a href="{{ url_for('score.course_detail', course_id=row.course.id) }}">{{ row.course.name }}</a>
-                                <span class="hint"><code>{{ row.course.code }}</code></span>
+                                <code>{{ row.course.code }}</code>
                             </td>
                             <td>{{ row.course.semester }}</td>
                             <td>{{ row.enrolled }}</td>
                             <td>{{ row.graded }}</td>
                             <td>{{ row.average if row.average is not none else '—' }}</td>
                             <td>
-                                {{ row.pass_rate }}%
-                                <span class="bar"><span class="bar-fill" style="width: {{ row.pass_rate }}%"></span></span>
+                                <span class="rate">
+                                    {{ row.pass_rate }}%
+                                    <span class="bar"><span class="bar-fill" style="width: {{ row.pass_rate }}%"></span></span>
+                                </span>
                             </td>
                         </tr>
                         {% else %}
-                        <tr><td colspan="6" class="empty">当前范围内还没有课程数据。</td></tr>
+                        <tr><td colspan="6" class="empty">当前范围内还没有课程数据</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -96,41 +70,26 @@
 
         <section class="tle-block">
             <h2 class="tle-block__title">分数段分布<span class="muted">（共 {{ summary.graded }} 条成绩）</span></h2>
-            <div style="max-width: 640px;">
-                <canvas id="distChart" height="220"></canvas>
-            </div>
+            <div class="chart-box"><canvas id="distChart" height="220"></canvas></div>
             <div class="tle-table-wrapper">
                 <table class="grid">
-                    <thead>
-                        <tr>{% for d in distribution %}<th>{{ d.label }}</th>{% endfor %}</tr>
-                    </thead>
-                    <tbody>
-                        <tr>{% for d in distribution %}<td>{{ d.count }}</td>{% endfor %}</tr>
-                    </tbody>
+                    <thead><tr>{% for d in distribution %}<th>{{ d.label }}</th>{% endfor %}</tr></thead>
+                    <tbody><tr>{% for d in distribution %}<td>{{ d.count }}</td>{% endfor %}</tr></tbody>
                 </table>
             </div>
+            <p class="hint" style="margin-top: 12px;">分数段区间左闭右开，90~100 含 100。</p>
         </section>
 
         {% if course_chart %}
         <section class="tle-block">
             <h2 class="tle-block__title">各课程平均分<span class="muted">（{{ course_chart | length }} 门已出成绩）</span></h2>
-            <div style="max-width: 640px;">
-                <canvas id="courseChart" height="220"></canvas>
-            </div>
+            <div class="chart-box"><canvas id="courseChart" height="220"></canvas></div>
             <div class="tle-table-wrapper">
                 <table class="grid">
-                    <thead>
-                        <tr>
-                            <th>课程</th>
-                            <th>平均分</th>
-                        </tr>
-                    </thead>
+                    <thead><tr><th>课程</th><th>平均分</th></tr></thead>
                     <tbody>
                         {% for c in course_chart %}
-                        <tr>
-                            <td><code>{{ c.label }}</code> {{ c.name }}</td>
-                            <td>{{ c.average }}</td>
-                        </tr>
+                        <tr><td><code>{{ c.label }}</code> {{ c.name }}</td><td>{{ c.average }}</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -143,15 +102,7 @@
             <h2 class="tle-block__title">班级排名<span class="muted">（按平均分）</span></h2>
             <div class="tle-table-wrapper">
                 <table class="grid">
-                    <thead>
-                        <tr>
-                            <th>名次</th>
-                            <th>班级</th>
-                            <th>成绩条数</th>
-                            <th>平均分</th>
-                            <th>及格率</th>
-                        </tr>
-                    </thead>
+                    <thead><tr><th>名次</th><th>班级</th><th>成绩条数</th><th>平均分</th><th>及格率</th></tr></thead>
                     <tbody>
                         {% for row in class_ranking %}
                         <tr>
@@ -168,12 +119,6 @@
         </section>
         {% endif %}
 
-        <p class="hint">
-            图表数据与上方表格同源（表格是不依赖 JavaScript 的回退展示）；所有口径都在服务端计算，
-            前端只负责渲染。分数段分箱：&lt;60 / 60~69 / 70~79 / 80~89 / 90~100
-            （左闭右开，90~100 含 100）。
-        </p>
-
     </div>
 </main>
 {% endblock %}
@@ -182,39 +127,46 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <script>
   (function () {
-    if (typeof Chart === 'undefined') { return; }  // 无网络时回退到表格
+    if (typeof Chart === 'undefined') { return; }   // 图表库没加载时，只显示上面的表格
+
+    Chart.defaults.font.family = '"Helvetica Neue", Helvetica, Arial, "PingFang SC", "Microsoft YaHei", sans-serif';
+    Chart.defaults.color = 'rgba(0, 0, 0, 0.65)';
+
+    var gridColor = 'rgba(0, 0, 0, 0.08)';
 
     var dist = {{ distribution | tojson }};
-    var distData = dist.map(function (d) { return d.count; });
     new Chart(document.getElementById('distChart'), {
       type: 'bar',
       data: {
         labels: dist.map(function (d) { return d.label; }),
-        datasets: [{ label: '成绩条数', data: distData, backgroundColor: 'rgba(29,78,216,0.55)' }]
+        datasets: [{ label: '成绩条数', data: dist.map(function (d) { return d.count; }), backgroundColor: 'rgb(0, 50, 189)', borderRadius: 0, maxBarThickness: 56 }]
       },
       options: {
         plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+        scales: {
+          x: { grid: { display: false } },
+          y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: gridColor } }
+        }
       }
     });
 
     var canvas = document.getElementById('courseChart');
     if (!canvas) { return; }
-
     var courseChart = {{ course_chart | tojson }};
     new Chart(canvas, {
       type: 'bar',
       data: {
         labels: courseChart.map(function (c) { return c.label; }),
-        datasets: [{ label: '平均分', data: courseChart.map(function (c) { return c.average; }), backgroundColor: 'rgba(15,118,110,0.55)' }]
+        datasets: [{ label: '平均分', data: courseChart.map(function (c) { return c.average; }), backgroundColor: 'rgb(0, 50, 189)', borderRadius: 0, maxBarThickness: 56 }]
       },
       options: {
         plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true, max: 100 } }
+        scales: {
+          x: { grid: { display: false } },
+          y: { beginAtZero: true, max: 100, grid: { color: gridColor } }
+        }
       }
     });
   })();
 </script>
 {% endblock %}
-
-{% block footer %}R9 — 统计报表：Chart.js 图表 / 分数段分布 / 班级排名（范围按角色收缩）{% endblock %}
