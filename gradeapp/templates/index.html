@@ -519,7 +519,7 @@
                     </div>
                     {% else %}
                     <p class="tle-header__intro-text">
-                        {{ school_name }}，请 <a href="{{ url_for('auth.login') }}">登录</a> 后使用
+                        {{ school_name }} · 当前为<strong>未登录</strong>状态，请 <a href="{{ url_for('auth.login') }}">登录</a> 后使用
                     </p>
                     {% endif %}
                 </div>
@@ -710,6 +710,40 @@
                 </div>
             </section>
             {% endif %}
+
+            <section class="tle-section">
+                <div class="tle-padding">
+                    <div class="tle-section__inner">
+                        <div class="tle-section__header">
+                            <h2 class="tle-section__title">系统状态</h2>
+                        </div>
+                        <div class="tle-section__content">
+                            <p class="tle-body-text">
+                                系统已启动 · 版本 <code>{{ version }}</code>
+                                · 数据库 <code>{{ db_path }}</code>
+                            </p>
+                            <div class="tle-table-wrapper">
+                                <table class="grid">
+                                    <thead>
+                                        <tr><th>数据表</th><th>建表状态</th><th>记录数</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for table in tables %}
+                                        <tr>
+                                            <td><code>{{ table.name }}</code></td>
+                                            <td>{% if table.built %}<span class="yes">已建表</span>{% else %}<span class="no">未建表</span>{% endif %}</td>
+                                            <td>{{ table.rows if table.rows is not none else '—' }}</td>
+                                        </tr>
+                                        {% else %}
+                                        <tr><td colspan="3" class="empty">暂无数据表</td></tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
 
         </div>
     </div>

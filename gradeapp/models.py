@@ -23,6 +23,15 @@ from .extensions import db
 ROLES: tuple[str, ...] = ("admin", "teacher", "student")
 EXAM_TYPES: tuple[str, ...] = ("平时", "期中", "期末")
 
+#: 总评成绩构成：考核类型 → 课程表字段名（教师可在课程详情页调整占比）
+WEIGHT_FIELDS: dict[str, str] = {
+    "平时": "weight_regular",
+    "期中": "weight_midterm",
+    "期末": "weight_final",
+}
+#: 新建课程的默认占比（合计 100%）：平时 30% + 期中 30% + 期末 40%
+DEFAULT_WEIGHTS: dict[str, int] = {"平时": 30, "期中": 30, "期末": 40}
+
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -102,6 +111,15 @@ class Teacher(db.Model):
 
 class Course(db.Model):
     __tablename__ = "course"
+    __table_args__ = (
+        CheckConstraint("weight_regular >= 0 AND weight_regular <= 100", name="ck_course_weight_regular"),
+        CheckConstraint("weight_midterm >= 0 AND weight_midterm <= 100", name="ck_course_weight_midterm"),
+        CheckConstraint("weight_final >= 0 AND weight_final <= 100", name="ck_course_weight_final"),
+        CheckConstraint(
+            "weight_regular + weight_midterm + weight_final = 100",
+            name="ck_course_weight_sum",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     code: Mapped[str] = mapped_column(String(32), unique=True, nullable=False, index=True)
@@ -111,9 +129,30 @@ class Course(db.Model):
     teacher_id: Mapped[Optional[int]] = mapped_column(ForeignKey("teacher.id"))
     semester: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     capacity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    weight_regular: Mapped[int] = mapped_column(Integer, nullable=False, default=30, server_default="30")
+    weight_midterm: Mapped[int] = mapped_column(Integer, nullable=False, default=30, server_default="30")
+    weight_final: Mapped[int] = mapped_column(Integer, nullable=False, default=40, server_default="40")
 
     teacher: Mapped[Optional["Teacher"]] = relationship(back_populates="courses")
     enrollments: Mapped[list["Enrollment"]] = relationship(back_populates="course", cascade="all, delete-orphan")
+
+    @property
+    def weights(self) -> dict[str, int]:
+        """当前课程的总评占比：``{"平时": 30, "期中": 30, "期末": 40}``。"""
+        return {exam_type: int(getattr(self, field)) for exam_type, field in WEIGHT_FIELDS.items()}
+
+    def weight_of(self, exam_type: str) -> int:
+        return int(getattr(self, WEIGHT_FIELDS[exam_type]))
+
+    def weighted_total(self, scores_by_type: dict[str, float]) -> float | None:
+        """按占比计算总评；三种考核成绩不齐时返回 ``None``（不拿缺失项当 0 分）。"""
+        if any(exam_type not in scores_by_type for exam_type in EXAM_TYPES):
+            return None
+        total = sum(
+            float(scores_by_type[exam_type]) * self.weight_of(exam_type) / 100
+            for exam_type in EXAM_TYPES
+        )
+        return round(total, 1)
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"<Course {self.code} {self.name}>"
@@ -159,4 +198,17 @@ class Score(db.Model):
 
 MODELS: tuple[type[db.Model], ...] = (User, Student, Teacher, Course, Enrollment, Score)
 
-__all__ = ["ROLES", "EXAM_TYPES", "MODELS", "User", "Student", "Teacher", "Course", "Enrollment", "Score", "utcnow"]
+__all__ = [
+    "ROLES",
+    "EXAM_TYPES",
+    "WEIGHT_FIELDS",
+    "DEFAULT_WEIGHTS",
+    "MODELS",
+    "User",
+    "Student",
+    "Teacher",
+    "Course",
+    "Enrollment",
+    "Score",
+    "utcnow",
+]

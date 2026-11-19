@@ -106,7 +106,7 @@ def test_teacher_exports_course_sheet_with_scores(app: Flask, client: FlaskClien
     """教师导出自授课程：表头正确、名单齐全、已有成绩回填到对应考核类型列。"""
     teacher = make_teacher("t1")
     course = make_course(teacher, "C001")
-    s1, s2 = make_student("s1", sno="2025001"), make_student("s2", sno="2025002")
+    s1, s2 = make_student("s1", sno="25010101"), make_student("s2", sno="25010202")
     e1, e2 = enroll(s1, course), enroll(s2, course)
     db.session.add(Score(enrollment_id=e1.id, exam_type="期末", score=88.5))
     db.session.add(Score(enrollment_id=e1.id, exam_type="平时", score=90))
@@ -123,8 +123,8 @@ def test_teacher_exports_course_sheet_with_scores(app: Flask, client: FlaskClien
     ws = load_workbook(io.BytesIO(response.data)).active
     assert [c.value for c in ws[1][:6]] == ["学号", "姓名", "班级", "平时", "期中", "期末"]
     body = {row[0]: row for row in ws.iter_rows(min_row=2, values_only=True)}
-    assert body["2025001"][3] == 90 and body["2025001"][5] == 88.5 and body["2025001"][4] is None  # 期中留白
-    assert body["2025002"][3] is None and body["2025002"][4] is None and body["2025002"][5] is None
+    assert body["25010101"][3] == 90 and body["25010101"][5] == 88.5 and body["25010101"][4] is None  # 期中留白
+    assert body["25010202"][3] is None and body["25010202"][4] is None and body["25010202"][5] is None
 
 
 def test_teacher_cannot_export_others_course(app: Flask, client: FlaskClient):
@@ -159,7 +159,7 @@ def test_student_exports_own_transcript(app: Flask, client: FlaskClient):
     teacher = make_teacher("t1")
     c1 = make_course(teacher, "C001")
     c2 = make_course(teacher, "C002")
-    me = make_student("s1", sno="2025001")
+    me = make_student("s1", sno="25010101")
     enroll(me, c2, )  # 未出成绩
     e1 = enroll(me, c1)
     db.session.add(Score(enrollment_id=e1.id, exam_type="期末", score=77))
@@ -178,6 +178,27 @@ def test_student_exports_own_transcript(app: Flask, client: FlaskClient):
     assert graded[7] == 77  # 第 8 列 = 期末（前 5 列身份信息 + 平时/期中/期末）
     ungraded = next(r for r in rows if r[1] == "C002")
     assert ungraded[7] is None  # 未出成绩留白（openpyxl 空单元格读回 None）
+
+
+def test_student_transcript_export_includes_weighted_total(app: Flask, client: FlaskClient):
+    """成绩单导出带「总评」列：按课程占比计算，成绩不齐时留空。"""
+    teacher = make_teacher("t1")
+    course = make_course(teacher, "C001")
+    course.weight_regular, course.weight_midterm, course.weight_final = 50, 20, 30
+    me = make_student("s1", sno="25010101")
+    e = enroll(me, course)
+    for exam_type, value in (("平时", 90), ("期中", 80), ("期末", 70)):
+        db.session.add(Score(enrollment_id=e.id, exam_type=exam_type, score=value))
+    db.session.commit()
+    login(client, "s1")
+
+    response = client.get("/score/my-scores/export")
+
+    ws = load_workbook(io.BytesIO(response.data)).active
+    header = [c.value for c in ws[1]]
+    assert header[-1] == "总评"
+    row = list(ws.iter_rows(min_row=2, values_only=True))[0]
+    assert row[-1] == 82.0  # 90*0.5 + 80*0.2 + 70*0.3
 
 
 def test_student_transcript_export_requires_profile(app: Flask, client: FlaskClient):
@@ -211,7 +232,7 @@ def test_import_grades_from_exported_template(app: Flask, client: FlaskClient):
     """导出 → 填分数 → 导入：成绩落库且 updated_by 记录操作人。"""
     teacher = make_teacher("t1")
     course = make_course(teacher, "C001")
-    s1, s2 = make_student("s1", sno="2025001"), make_student("s2", sno="2025002")
+    s1, s2 = make_student("s1", sno="25010101"), make_student("s2", sno="25010202")
     e1, e2 = enroll(s1, course), enroll(s2, course)
     login(client, "t1")
 
@@ -239,15 +260,15 @@ def test_import_reports_row_errors_and_keeps_valid_rows(app: Flask, client: Flas
     """学号不在名单 / 非数字 / 超范围逐条报告；有效行照常导入（部分保存）。"""
     teacher = make_teacher("t1")
     course = make_course(teacher, "C001")
-    s1 = make_student("s1", sno="2025001")
+    s1 = make_student("s1", sno="25010101")
     e1 = enroll(s1, course)
     login(client, "t1")
 
     buffer = build_xlsx([
-        ["2025001", s1.name, "计算机2501", "", "", "95"],    # 有效
+        ["25010101", s1.name, "计算机2501", "", "", "95"],    # 有效
         ["9999999", "陌生人", "无", "", "", "66"],           # 学号不在名单
-        ["2025001", s1.name, "计算机2501", "abc", "", ""],   # 非数字
-        ["2025001", s1.name, "计算机2501", "", "", "120"],   # 超范围
+        ["25010101", s1.name, "计算机2501", "abc", "", ""],   # 非数字
+        ["25010101", s1.name, "计算机2501", "", "", "120"],   # 超范围
     ])
     response = upload(client, f"/score/courses/{course.id}/import", buffer)
 
@@ -264,7 +285,7 @@ def test_import_blank_cells_and_reimport_updates(app: Flask, client: FlaskClient
     """留空不修改；同一考核类型再次导入 = 更新而不是新增。"""
     teacher = make_teacher("t1")
     course = make_course(teacher, "C001")
-    s1 = make_student("s1", sno="2025001")
+    s1 = make_student("s1", sno="25010101")
     e1 = enroll(s1, course)
     db.session.add(Score(enrollment_id=e1.id, exam_type="期末", score=60))
     db.session.commit()
@@ -272,13 +293,13 @@ def test_import_blank_cells_and_reimport_updates(app: Flask, client: FlaskClient
 
     # 全部留空：什么都不改
     response = upload(client, f"/score/courses/{course.id}/import",
-                      build_xlsx([["2025001", s1.name, "计算机2501", "", "", ""]]))
+                      build_xlsx([["25010101", s1.name, "计算机2501", "", "", ""]]))
     assert "没有需要导入的成绩" in response.get_data(as_text=True)
     assert score_count() == 1
 
     # 期末改 99：更新原记录，不新增
     upload(client, f"/score/courses/{course.id}/import",
-           build_xlsx([["2025001", s1.name, "计算机2501", "", "", "99"]]))
+           build_xlsx([["25010101", s1.name, "计算机2501", "", "", "99"]]))
     rows = list(db.session.scalars(select(Score)).all())
     assert len(rows) == 1 and rows[0].score == 99 and rows[0].exam_type == "期末"
 
@@ -287,7 +308,7 @@ def test_import_rejects_non_xlsx_and_bad_files(app: Flask, client: FlaskClient):
     """非 .xlsx 后缀与损坏文件被拒绝并提示，不落库。"""
     teacher = make_teacher("t1")
     course = make_course(teacher, "C001")
-    enroll(make_student("s1", sno="2025001"), course)
+    enroll(make_student("s1", sno="25010101"), course)
     login(client, "t1")
 
     response = upload(client, f"/score/courses/{course.id}/import",
@@ -303,7 +324,7 @@ def test_import_rejects_non_xlsx_and_bad_files(app: Flask, client: FlaskClient):
 
     # 表头缺学号列
     response = upload(client, f"/score/courses/{course.id}/import",
-                      build_xlsx([["2025001", "1", "1", "1", "1", "1"]], header=["序号", "a", "b", "c", "d", "e"]))
+                      build_xlsx([["25010101", "1", "1", "1", "1", "1"]], header=["序号", "a", "b", "c", "d", "e"]))
     assert "表头缺少「学号」列" in response.get_data(as_text=True)
 
     assert score_count() == 0
@@ -313,12 +334,12 @@ def test_import_is_row_level_checked(app: Flask, client: FlaskClient):
     """教师只能导入自己课程的 Excel：他人课程 403 且无副作用。"""
     owner, other = make_teacher("owner"), make_teacher("other")
     course = make_course(owner, "C001")
-    s1 = make_student("s1", sno="2025001")
+    s1 = make_student("s1", sno="25010101")
     enroll(s1, course)
     login(other_client := app.test_client(), "other")
 
     response = upload(other_client, f"/score/courses/{course.id}/import",
-                      build_xlsx([["2025001", s1.name, "计算机2501", "", "", "88"]]))
+                      build_xlsx([["25010101", s1.name, "计算机2501", "", "", "88"]]))
     assert response.status_code == 403
     assert score_count() == 0
 

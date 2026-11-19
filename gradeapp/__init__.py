@@ -119,9 +119,16 @@ def _register_navigation(app: Flask) -> None:
 
 
 def _register_branding(app: Flask) -> None:
+    from .student_no import STUDENT_NO_EXAMPLE, STUDENT_NO_HINT
+
     @app.context_processor
     def inject_branding() -> dict[str, str]:
-        return {"system_name": app.config["SYSTEM_NAME"], "school_name": app.config["SCHOOL_NAME"]}
+        return {
+            "system_name": app.config["SYSTEM_NAME"],
+            "school_name": app.config["SCHOOL_NAME"],
+            "student_no_hint": STUDENT_NO_HINT,
+            "student_no_example": STUDENT_NO_EXAMPLE,
+        }
 
 
 def _register_error_handlers(app: Flask) -> None:
@@ -211,7 +218,7 @@ def _seed_sample_data() -> dict[str, int]:
 
     student = student_user.student
     if not student:
-        student = Student(user_id=student_user.id, sno="2025001", name="李小明", gender="男", class_name="计算机2501", enroll_year=2025)
+        student = Student(user_id=student_user.id, sno="25010101", name="李小明", gender="男", class_name="计算机2501", enroll_year=2025)
         db.session.add(student)
         db.session.flush()
         created["student"] += 1

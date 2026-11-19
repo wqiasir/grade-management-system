@@ -27,6 +27,10 @@
                 </span>
             </div>
             <div><span class="fact__label">授课教师</span><span class="fact__value">{{ course.teacher.name if course.teacher else '待安排' }}</span></div>
+            <div>
+                <span class="fact__label">总评占比</span>
+                <span class="fact__value">平时 {{ course.weights['平时'] }}% / 期中 {{ course.weights['期中'] }}% / 期末 {{ course.weights['期末'] }}%</span>
+            </div>
             <div><span class="fact__label">当前身份</span><span class="fact__value">{{ role_label }}</span></div>
         </div>
 
@@ -35,6 +39,42 @@
             {% elif is_teacher %}选课名单对你<strong>只读</strong>，教师不能选课、退课或移人；你可以为选课学生录入或修改成绩。
             {% else %}你可以退选自己的记录；<strong>已出成绩的课程不能退课</strong>。{% endif %}
         </p>
+
+        <section class="tle-block" id="grade-weights">
+            <h2 class="tle-block__title">总评成绩组成</h2>
+            {% if can_edit_weights %}
+            <form class="tle-form" method="post" action="{{ url_for('score.weights_update', course_id=course.id) }}">
+                {{ weight_form.hidden_tag() }}
+                <div class="tle-form__row tle-form__row--3">
+                    <div class="tle-form__field">
+                        <label for="{{ weight_form.weight_regular.id }}">平时成绩占比（%）</label>
+                        {{ weight_form.weight_regular(type='number', min='0', max='100', step='1') }}
+                    </div>
+                    <div class="tle-form__field">
+                        <label for="{{ weight_form.weight_midterm.id }}">期中成绩占比（%）</label>
+                        {{ weight_form.weight_midterm(type='number', min='0', max='100', step='1') }}
+                    </div>
+                    <div class="tle-form__field">
+                        <label for="{{ weight_form.weight_final.id }}">期末成绩占比（%）</label>
+                        {{ weight_form.weight_final(type='number', min='0', max='100', step='1') }}
+                    </div>
+                </div>
+                <p class="hint">
+                    三项占比必须是 0~100 的整数且<strong>合计为 100%</strong>；默认
+                    {{ default_weights['平时'] }} / {{ default_weights['期中'] }} / {{ default_weights['期末'] }}。
+                    修改后已录入的成绩不变，总评按新占比即时重算。
+                </p>
+                <button class="btn btn-primary btn-sm" type="submit">保存占比</button>
+            </form>
+            {% else %}
+            <p class="note">
+                总评 = 平时 <strong>{{ course.weights['平时'] }}%</strong> +
+                期中 <strong>{{ course.weights['期中'] }}%</strong> +
+                期末 <strong>{{ course.weights['期末'] }}%</strong>；
+                三项成绩齐全后显示总评，不拿缺失项当 0 分。
+            </p>
+            {% endif %}
+        </section>
 
         {% if add_form %}
         <section class="tle-block">
@@ -83,6 +123,7 @@
                             <th>班级</th>
                             <th>选课时间</th>
                             <th>成绩（0-100）</th>
+                            <th>总评</th>
                             {% if has_action_col %}
                             <th>操作</th>{% endif %}
                         </tr>
@@ -111,6 +152,16 @@
                                 <span class="hint">未录入</span>
                                 {% endif %}
                             </td>
+                            <td>
+                                {% set total = total_scores.get(e.id) %}
+                                {% if total is not none %}
+                                <strong>{{ '%.1f' | format(total) }}</strong>
+                                {% elif items %}
+                                <span class="hint">缺 {{ missing_types.get(e.id, []) | join('、') }}</span>
+                                {% else %}
+                                <span class="hint">未录入</span>
+                                {% endif %}
+                            </td>
                             {% if has_action_col %}
                             <td>
                                 {% set can_drop = is_admin or (e.id is eq my_enrollment_id) %}
@@ -129,7 +180,7 @@
                             {% endif %}
                         </tr>
                         {% else %}
-                        <tr><td colspan="{{ 7 if has_action_col else 6 }}" class="empty">这门课还没有人选</td></tr>
+                        <tr><td colspan="{{ 8 if has_action_col else 7 }}" class="empty">这门课还没有人选</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>

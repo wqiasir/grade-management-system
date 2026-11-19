@@ -8,8 +8,8 @@ from flask_wtf import FlaskForm
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
-from wtforms import SelectField
-from wtforms.validators import DataRequired
+from wtforms import IntegerField, SelectField
+from wtforms.validators import DataRequired, InputRequired, NumberRange
 
 from .decorators import (
     ROLE_LABELS,
@@ -20,7 +20,7 @@ from .decorators import (
     role_required,
 )
 from .extensions import db
-from .models import EXAM_TYPES, Course, Enrollment, Score, Student
+from .models import DEFAULT_WEIGHTS, EXAM_TYPES, WEIGHT_FIELDS, Course, Enrollment, Score, Student
 
 bp = Blueprint("score", __name__, url_prefix="/score")
 
@@ -37,6 +37,35 @@ class RosterAddForm(FlaskForm):
         validators=[DataRequired(message="请选择要加入课程的学生")],
         validate_choice=False,
     )
+
+
+class GradeWeightForm(FlaskForm):
+    """教师调整课程总评成绩构成（平时 / 期中 / 期末占比，合计 100%）。"""
+
+    weight_regular = IntegerField(
+        "平时成绩占比",
+        validators=[InputRequired("请填写平时成绩占比"), NumberRange(0, 100, "占比需在 0~100 之间")],
+    )
+    weight_midterm = IntegerField(
+        "期中成绩占比",
+        validators=[InputRequired("请填写期中成绩占比"), NumberRange(0, 100, "占比需在 0~100 之间")],
+    )
+    weight_final = IntegerField(
+        "期末成绩占比",
+        validators=[InputRequired("请填写期末成绩占比"), NumberRange(0, 100, "占比需在 0~100 之间")],
+    )
+
+    def validate(self, extra_validators=None) -> bool:
+        if not super().validate(extra_validators):
+            return False
+        total = sum(
+            int(getattr(self, field).data or 0)
+            for field in WEIGHT_FIELDS.values()
+        )
+        if total != 100:
+            self.weight_final.errors.append(f"三项占比之和必须为 100%，当前为 {total}%。")
+            return False
+        return True
 
 
 # --------------------------------------------------------------------------- #
@@ -74,6 +103,18 @@ def _addable_student_choices(course: Course) -> list[tuple[int, str]]:
     enrolled_ids = set(db.session.scalars(select(Enrollment.student_id).where(Enrollment.course_id == course.id)).all())
     students = db.session.scalars(select(Student).order_by(Student.sno)).all()
     return [(0, "—— 选择学生 ——")] + [(s.id, f"{s.name}（{s.sno}）") for s in students if s.id not in enrolled_ids]
+
+
+def _totals_for(course: Course, exam_scores: dict[int, dict[str, Score]]) -> tuple[dict[int, float | None], dict[int, list[str]]]:
+    """按课程占比计算每条选课记录的总评，并列出仍缺失的考核类型。"""
+    totals: dict[int, float | None] = {}
+    missing: dict[int, list[str]] = {}
+    for enrollment_id, by_type in exam_scores.items():
+        totals[enrollment_id] = course.weighted_total(
+            {exam_type: record.score for exam_type, record in by_type.items()}
+        )
+        missing[enrollment_id] = [exam_type for exam_type in EXAM_TYPES if exam_type not in by_type]
+    return totals, missing
 
 
 # --------------------------------------------------------------------------- #
@@ -233,14 +274,50 @@ def course_detail(course_id: int):
         add_form = RosterAddForm()
         add_form.student_id.choices = _addable_student_choices(course)
 
+    can_edit_weights = g.user.role in ("admin", "teacher")
+    total_scores, missing_types = _totals_for(course, exam_scores)
     enrolled_count = len(enrollments)
     return render_template(
         "score/course_detail.html", course=course, enrollments=enrollments, score_map=score_map,
         exam_scores=exam_scores, grade_exam=grade_exam, exam_types=EXAM_TYPES,
         enrolled_count=enrolled_count, remaining=_remaining_seats(course, enrolled_count),
         my_enrollment_id=my_enrollment_id, add_form=add_form, action_form=ActionForm(),
+        can_edit_weights=can_edit_weights,
+        weight_form=GradeWeightForm(obj=course) if can_edit_weights else None,
+        default_weights=DEFAULT_WEIGHTS, total_scores=total_scores, missing_types=missing_types,
         role_label=role_label(g.user.role), back_url=url_for("score.my_courses")
     )
+
+
+@bp.post("/courses/<int:course_id>/weights")
+@role_required("admin", "teacher")
+@login_required
+def weights_update(course_id: int):
+    """教师（及管理员）调整课程总评成绩组成占比。
+
+    约束：三项均为 0~100 的整数，且合计必须为 100%；已录入的成绩不受影响，
+    总评会按新占比即时重算。
+    """
+    course = db.get_or_404(Course, course_id)
+    if denial := guard_course_access(course):
+        return denial
+
+    form = GradeWeightForm()
+    if not form.validate_on_submit():
+        message = "；".join(error for errors in form.errors.values() for error in errors)
+        flash(message or "占比保存失败，请检查输入。", "error")
+        return redirect(url_for("score.course_detail", course_id=course.id, _anchor="grade-weights"))
+
+    course.weight_regular = form.weight_regular.data
+    course.weight_midterm = form.weight_midterm.data
+    course.weight_final = form.weight_final.data
+    db.session.commit()
+    flash(
+        f"已更新「{course.name}」总评占比：平时 {course.weight_regular}% + "
+        f"期中 {course.weight_midterm}% + 期末 {course.weight_final}%。",
+        "success",
+    )
+    return redirect(url_for("score.course_detail", course_id=course.id, _anchor="grade-weights"))
 
 
 @bp.post("/courses/<int:course_id>/enroll")
@@ -305,7 +382,17 @@ def _transcript_groups_for(student_id: int) -> list[dict]:
             e.scores,
             key=lambda s: EXAM_TYPES.index(s.exam_type) if s.exam_type in EXAM_TYPES else len(EXAM_TYPES),
         )
-        group["rows"].append({"enrollment": e, "course": course, "scores": scores, "graded": bool(scores)})
+        by_type = {s.exam_type: s.score for s in scores}
+        group["rows"].append(
+            {
+                "enrollment": e,
+                "course": course,
+                "scores": scores,
+                "graded": bool(scores),
+                "total": course.weighted_total(by_type),
+                "missing": [exam_type for exam_type in EXAM_TYPES if exam_type not in by_type],
+            }
+        )
     return [groups[key] for key in sorted(groups, reverse=True)]
 
 

@@ -635,7 +635,7 @@ def test_admin_home_shows_account_overview(
     login(client, "admin1")
     html = client.get("/").get_data(as_text=True)
 
-    assert "管理员首页" in html
+    assert "数据概览" in html
     assert "账号总数" in html
 
 
@@ -803,6 +803,7 @@ ROUTE_COVERAGE_INVENTORY: dict[str, str] = {
     "/score/courses/<int:course_id>": "tests/test_score.py（行级校验 + 名单页）",
     "/score/courses/<int:course_id>/enroll": "tests/test_score.py（POST 管理员代选）",
     "/score/courses/<int:course_id>/scores": "tests/test_score.py（POST 成绩录入）",
+    "/score/courses/<int:course_id>/weights": "tests/test_score.py（POST 总评占比修改）",
     "/score/courses/<int:course_id>/export": "tests/test_excel.py（导出）",
     "/score/courses/<int:course_id>/import": "tests/test_excel.py（导入）",
     "/score/my-scores": "权限矩阵（仅 student）",

@@ -13,7 +13,7 @@
             {{ form.csrf_token }}
 
             <div class="tle-form__row tle-form__row--2">
-                {{ form_row(form.sno, '学号', true) }}
+                {{ form_row(form.sno, '学号', true, student_no_hint, placeholder=student_no_example) }}
                 {{ form_row(form.name, '姓名', true) }}
             </div>
 

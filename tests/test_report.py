@@ -140,7 +140,7 @@ def test_overview_renders_chart_data_and_fallback_table(
     assert "chart.js" in html.lower()        # CDN 引入
     assert "&lt;60" in html and "90~100" in html  # <60 会被 HTML 转义
     assert "C001" in html and "C002" in html  # 课程平均分数据
-    assert "班级排名（按平均分）" in html
+    assert "班级排名" in html and "按平均分" in html
     assert "计算机2501" in html
 
 

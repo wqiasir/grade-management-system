@@ -133,7 +133,7 @@ def export_my_scores():
     wb = Workbook()
     ws = wb.active
     ws.title = "我的成绩单"
-    columns = ("学期", "课程代码", "课程名称", "授课教师", "学分") + EXAM_TYPES
+    columns = ("学期", "课程代码", "课程名称", "授课教师", "学分") + EXAM_TYPES + ("总评",)
     _styled_header_row(ws, columns)
     for index, e in enumerate(enrollments, start=2):
         course = e.course
@@ -147,6 +147,7 @@ def export_my_scores():
             value = by_type.get(exam_type)
             if value is not None:
                 ws.cell(row=index, column=offset, value=int(value) if value == int(value) else value)
+        ws.cell(row=index, column=len(columns), value=course.weighted_total(by_type))
 
     return _workbook_response(wb, f"成绩单_{student.sno}_{student.name}")
 

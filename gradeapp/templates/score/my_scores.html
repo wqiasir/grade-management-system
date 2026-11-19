@@ -21,7 +21,7 @@
             学生：<strong>{{ student.name }}（{{ student.sno }}{% if student.class_name %} · {{ student.class_name }}{% endif %}）</strong>
         </p>
         {% elif not is_admin %}
-        <p class="tle-page__meta">可见范围：<strong>仅你本人的成绩</strong> · 平时、期中、期末按考核类型并列展示</p>
+        <p class="tle-page__meta">可见范围：<strong>仅你本人的成绩</strong> · 平时、期中、期末按考核类型并列展示，总评按各课程占比计算</p>
         {% endif %}
 
         {% if student %}
@@ -43,6 +43,7 @@
                             <th>学分</th>
                             {% for t in exam_types %}
                             <th>{{ t }}</th>{% endfor %}
+                            <th>总评</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -56,6 +57,21 @@
                             {% set matched = row.scores | selectattr('exam_type', 'eq', t) | list %}
                             <td>{% if matched %}<strong>{{ matched[0].score }}</strong>{% else %}<span class="hint">未录入</span>{% endif %}</td>
                             {% endfor %}
+                            <td>
+                                {% if row.total is not none %}
+                                <strong>{{ '%.1f' | format(row.total) }}</strong>
+                                <span class="hint"
+                                      title="平时 {{ row.course.weights['平时'] }}% + 期中 {{ row.course.weights['期中'] }}% + 期末 {{ row.course.weights['期末'] }}%">
+                                    （{{ row.course.weights['平时'] }}/{{ row.course.weights['期中'] }}/{{ row.course.weights['期末'] }}）
+                                </span>
+                                {% elif not row.graded %}
+                                <span class="hint">未录入</span>
+                                {% elif row.missing %}
+                                <span class="hint">缺 {{ row.missing | join('、') }}</span>
+                                {% else %}
+                                <span class="hint">未录入</span>
+                                {% endif %}
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>

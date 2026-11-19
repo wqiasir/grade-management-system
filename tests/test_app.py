@@ -73,7 +73,10 @@ def test_expected_columns_exist(app: Flask) -> None:
         "user": {"id", "username", "password_hash", "role", "real_name", "is_active", "created_at"},
         "student": {"id", "user_id", "sno", "name", "gender", "class_name", "enroll_year"},
         "teacher": {"id", "user_id", "tno", "name", "title", "department"},
-        "course": {"id", "code", "name", "credit", "hours", "teacher_id", "semester", "capacity"},
+        "course": {
+            "id", "code", "name", "credit", "hours", "teacher_id", "semester", "capacity",
+            "weight_regular", "weight_midterm", "weight_final",
+        },
         "enrollment": {"id", "student_id", "course_id", "enrolled_at"},
         "score": {"id", "enrollment_id", "exam_type", "score", "updated_by", "updated_at"},
     }
@@ -130,7 +133,10 @@ def test_seed_command_creates_sample_data_idempotently(app: Flask, runner: Flask
     student = db.session.scalar(db.select(Student))
     assert teacher.user.username == "teacher"
     assert student.user.username == "student"
-    assert db.session.scalar(db.select(Course)).teacher_id == teacher.id
+    assert student.sno == "25010101"  # 25 年 + 01 计算机学院 + 01 班 + 01 号
+    course = db.session.scalar(db.select(Course))
+    assert course.teacher_id == teacher.id
+    assert course.weights == {"平时": 30, "期中": 30, "期末": 40}
 
     # 再跑一次不应产生重复记录
     again = runner.invoke(args=["seed"])

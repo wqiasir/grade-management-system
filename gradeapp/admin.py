@@ -6,13 +6,14 @@ from datetime import datetime
 from flask import Blueprint, abort, flash, g, redirect, render_template, request, url_for
 from flask_wtf import FlaskForm
 from wtforms import FloatField, IntegerField, PasswordField, SelectField, StringField
-from wtforms.validators import DataRequired, InputRequired, Length, NumberRange, Optional, Regexp
+from wtforms.validators import DataRequired, InputRequired, Length, NumberRange, Optional, Regexp, ValidationError
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
 from .decorators import ROLE_LABELS, login_required, role_label, role_required
 from .extensions import db
 from .models import Course, Enrollment, Student, Teacher, User
+from .student_no import class_no_from_name, parse_student_no, student_number_error
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
 PER_PAGE = 10
@@ -55,12 +56,39 @@ class ActionForm(FlaskForm):
     """仅生成 csrf_token 的空表单"""
 
 class StudentForm(FlaskForm):
-    sno = StringField("学号", validators=[DataRequired("学号不能为空"), Length(max=32)])
+    sno = StringField("学号", validators=[DataRequired("学号不能为空")])
     name = StringField("姓名", validators=[DataRequired("姓名不能为空"), Length(max=64)])
     gender = SelectField("性别", choices=[("", "未选择"), ("男", "男"), ("女", "女")], default="")
     class_name = StringField("班级", validators=[Optional(), Length(max=64)])
     enroll_year = IntegerField("入学年份", validators=[Optional()], default=datetime.now().year)
     password = PasswordField("初始密码", validators=[Optional(), Length(min=6, message="密码至少需要6个字符")])
+
+    def validate_sno(self, field: StringField) -> None:
+        """学号必须符合 8 位新格式，并与入学年份 / 班级号保持一致。
+
+        学号本身已经编码了年份与班级，这里做交叉校验，避免录入
+        ``25010204`` 却把班级填成 3 班这类自相矛盾的数据；
+        入学年份留空时直接由学号推导（表单不再强制重复填写）。
+        """
+        sno = (field.data or "").strip()
+        if error := student_number_error(sno):
+            raise ValidationError(error)
+
+        parsed = parse_student_no(sno)
+        assert parsed is not None
+        if self.enroll_year.data and int(self.enroll_year.data) % 100 != parsed.year_short:
+            raise ValidationError(
+                f"学号中的年份“{parsed.year_short:02d}”与入学年份 {self.enroll_year.data} 不一致。"
+            )
+        if expected_class_no := class_no_from_name(self.class_name.data):
+            if expected_class_no != parsed.class_no:
+                raise ValidationError(
+                    f"学号中的班级号“{parsed.class_no}”与班级“{self.class_name.data}”不一致。"
+                )
+
+        field.data = sno
+        if not self.enroll_year.data:
+            self.enroll_year.data = parsed.enroll_year
 
 class TeacherForm(FlaskForm):
     tno = StringField("工号", validators=[DataRequired("工号不能为空"), Length(max=32)])

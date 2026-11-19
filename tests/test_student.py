@@ -59,14 +59,14 @@ def as_admin(client: FlaskClient) -> User:
 # --------------------------------------------------------------------------- #
 def test_student_list_searches_by_sno_name_and_class(app: Flask, client: FlaskClient):
     """关键词命中学号 / 姓名 / 班级任一字段。"""
-    make_student("a1", sno="2025001")
-    target = make_student("b2", sno="2025002")
+    make_student("a1", sno="25010101")
+    target = make_student("b2", sno="25010202")
     target.name = "王小明"
     target.class_name = "计算机2502"
     db.session.commit()
     as_admin(client)
 
-    assert "2025001" not in client.get("/admin/students?q=2025002").get_data(as_text=True)
+    assert "25010101" not in client.get("/admin/students?q=25010202").get_data(as_text=True)
     assert "王小明" in client.get("/admin/students?q=小明").get_data(as_text=True)
     assert "计算机2502" in client.get("/admin/students?q=2502").get_data(as_text=True)
 
@@ -74,15 +74,15 @@ def test_student_list_searches_by_sno_name_and_class(app: Flask, client: FlaskCl
 def test_student_list_pagination(app: Flask, client: FlaskClient):
     """PER_PAGE=10：第 11 名学生落到第 2 页。"""
     for i in range(11):
-        make_student(f"s{i:02d}", sno=f"20250{i:03d}")
+        make_student(f"s{i:02d}", sno=f"250101{i + 1:02d}")
     as_admin(client)
 
     first = client.get("/admin/students").get_data(as_text=True)
     assert "第 1 / 2 页" in first
     second = client.get("/admin/students?page=2").get_data(as_text=True)
     assert "第 2 / 2 页" in second
-    # 按学号排序：第 1 页最后一个不是 2025010（第 11 条在第 2 页）
-    assert "20250010" in second
+    # 按学号排序：第 1 页最后一个不是 25010111（第 11 条在第 2 页）
+    assert "25010111" in second
 
 
 # --------------------------------------------------------------------------- #
@@ -93,16 +93,16 @@ def test_student_create_builds_account_with_default_password(app: Flask, client:
     as_admin(client)
 
     response = client.post("/admin/students/create", data={
-        "sno": "2025999", "name": "陈新", "gender": "女",
+        "sno": "25010399", "name": "陈新", "gender": "女",
         "class_name": "计算机2503", "enroll_year": "2025", "password": "",
     }, follow_redirects=True)
 
     html = response.get_data(as_text=True)
     assert "创建成功" in html and "123456" in html
-    user = db.session.scalar(select(User).where(User.username == "2025999"))
+    user = db.session.scalar(select(User).where(User.username == "25010399"))
     assert user is not None and user.role == "student" and user.real_name == "陈新"
     assert user.password_hash != "123456" and user.check_password("123456")
-    student = db.session.scalar(select(Student).where(Student.sno == "2025999"))
+    student = db.session.scalar(select(Student).where(Student.sno == "25010399"))
     assert student is not None and student.user_id == user.id and student.gender == "女"
 
 
@@ -110,19 +110,20 @@ def test_student_create_with_custom_password(app: Flask, client: FlaskClient):
     """初始密码可自定义，入库仍是哈希。"""
     as_admin(client)
     client.post("/admin/students/create", data={
-        "sno": "2025888", "name": "李自定义", "gender": "", "class_name": "",
+        "sno": "25010588", "name": "李自定义", "gender": "", "class_name": "",
         "enroll_year": "2025", "password": "custom-pass-1",
     })
-    user = db.session.scalar(select(User).where(User.username == "2025888"))
+    user = db.session.scalar(select(User).where(User.username == "25010588"))
     assert user.check_password("custom-pass-1") and not user.check_password("123456")
 
 
 def test_student_create_rejects_duplicate_sno(app: Flask, client: FlaskClient):
     """学号与既有用户名冲突都被拒，不落库。"""
-    existing = make_student("stu1", sno="2025001")
+    existing = make_student("stu1", sno="25010101")
+    make_user("25010999", "admin")  # 非学生账号占用了某个 8 位用户名
     as_admin(client)
 
-    for field, value in (("学号冲突", "2025001"), ("用户名冲突", "stu1")):
+    for field, value in (("学号冲突", "25010101"), ("用户名冲突", "25010999")):
         before = int(db.session.scalar(select(func.count()).select_from(Student)) or 0)
         response = client.post("/admin/students/create", data={
             "sno": value, "name": "重复测试", "gender": "", "class_name": "",
@@ -130,6 +131,40 @@ def test_student_create_rejects_duplicate_sno(app: Flask, client: FlaskClient):
         }, follow_redirects=True)
         assert "已存在" in response.get_data(as_text=True), field
         assert (int(db.session.scalar(select(func.count()).select_from(Student)) or 0)) == before
+
+
+def test_student_number_uses_new_eight_digit_format(app: Flask, client: FlaskClient):
+    """学号必须为 [年份后两位][01 学院][2 位班级号][2 位班内序号]，且与年份/班级一致。"""
+    as_admin(client)
+    cases = [
+        ("202501001", "2025", "计算机2501", "8 位数字"),       # 旧 9 位格式
+        ("25020204", "2025", "计算机2502", "学院编号"),         # 学院不是 01
+        ("25010004", "2025", "计算机2500", "班级号"),           # 班级号 00
+        ("25010200", "2025", "计算机2502", "班内序号"),         # 序号 00
+        ("26010204", "2025", "计算机2602", "不一致"),           # 年份与学号冲突
+        ("25010204", "2025", "计算机2503", "不一致"),           # 班级号与学号冲突
+    ]
+    for sno, enroll_year, class_name, expected in cases:
+        response = client.post("/admin/students/create", data={
+            "sno": sno, "name": "格式测试", "gender": "", "class_name": class_name,
+            "enroll_year": enroll_year, "password": "",
+        }, follow_redirects=True)
+        assert expected in response.get_data(as_text=True), (sno, expected)
+
+    assert int(db.session.scalar(select(func.count()).select_from(Student)) or 0) == 0
+
+
+def test_student_create_derives_enroll_year_from_new_sno(app: Flask, client: FlaskClient):
+    """入学年份留空时由学号推导，减少重复录入。"""
+    as_admin(client)
+    response = client.post("/admin/students/create", data={
+        "sno": "25010204", "name": "自动年份", "gender": "", "class_name": "计算机2502",
+        "enroll_year": "", "password": "",
+    }, follow_redirects=True)
+
+    assert "创建成功" in response.get_data(as_text=True)
+    student = db.session.scalar(select(Student).where(Student.sno == "25010204"))
+    assert student is not None and student.enroll_year == 2025
 
 
 def test_student_create_validates_required_fields(app: Flask, client: FlaskClient):
@@ -148,30 +183,30 @@ def test_student_create_validates_required_fields(app: Flask, client: FlaskClien
 # --------------------------------------------------------------------------- #
 def test_student_edit_syncs_username_and_can_reset_password(app: Flask, client: FlaskClient):
     """改学号同步改用户名；填密码则重置口令；不填密码口令不变。"""
-    student = make_student("stu1", sno="2025001")
+    student = make_student("stu1", sno="25010101")
     as_admin(client)
 
     response = client.post(f"/admin/students/{student.id}/edit", data={
-        "sno": "2025002", "name": "改名同学", "gender": "女",
-        "class_name": "计算机2505", "enroll_year": "2024", "password": "new-pass-9",
+        "sno": "24010502", "name": "改名同学", "gender": "女",
+        "class_name": "计算机2405", "enroll_year": "2024", "password": "new-pass-9",
     }, follow_redirects=True)
     assert "信息更新成功" in response.get_data(as_text=True)
 
     db.session.expire_all()
     user = db.session.get(User, student.user_id)
-    assert user.username == "2025002"
+    assert user.username == "24010502"
     assert user.real_name == "改名同学"
     assert user.check_password("new-pass-9")
     student = db.session.get(Student, student.id)
-    assert student.sno == "2025002" and student.enroll_year == 2024
+    assert student.sno == "24010502" and student.enroll_year == 2024
 
 
 def test_student_edit_without_password_keeps_old(app: Flask, client: FlaskClient):
     """编辑不填密码：口令保持不变。"""
-    student = make_student("stu1", sno="2025001")
+    student = make_student("stu1", sno="25010101")
     as_admin(client)
     client.post(f"/admin/students/{student.id}/edit", data={
-        "sno": "2025001", "name": "改名同学", "gender": "", "class_name": "",
+        "sno": "25010101", "name": "改名同学", "gender": "", "class_name": "",
         "enroll_year": "2025", "password": "",
     })
     db.session.expire_all()
@@ -180,17 +215,17 @@ def test_student_edit_without_password_keeps_old(app: Flask, client: FlaskClient
 
 def test_student_edit_rejects_taken_sno(app: Flask, client: FlaskClient):
     """学号被其他学生占用 → 拒绝且原学号不变。"""
-    make_student("other", sno="2025002")
-    student = make_student("stu1", sno="2025001")
+    make_student("other", sno="25010102")
+    student = make_student("stu1", sno="25010101")
     as_admin(client)
 
     response = client.post(f"/admin/students/{student.id}/edit", data={
-        "sno": "2025002", "name": "撞号同学", "gender": "", "class_name": "",
+        "sno": "25010102", "name": "撞号同学", "gender": "", "class_name": "",
         "enroll_year": "2025", "password": "",
     }, follow_redirects=True)
     assert "已被占用" in response.get_data(as_text=True)
     db.session.expire_all()
-    assert db.session.get(Student, student.id).sno == "2025001"
+    assert db.session.get(Student, student.id).sno == "25010101"
 
 
 # --------------------------------------------------------------------------- #
@@ -198,7 +233,7 @@ def test_student_edit_rejects_taken_sno(app: Flask, client: FlaskClient):
 # --------------------------------------------------------------------------- #
 def test_student_delete_cascades_account_enrollments_scores(app: Flask, client: FlaskClient):
     """删除学生 = 连账号一起删；选课记录与成绩级联删除。"""
-    student = make_student("stu1", sno="2025001")
+    student = make_student("stu1", sno="25010101")
     from gradeapp.models import Course
     course = Course(code="C001", name="课程C001", credit=3.0, hours=48,
                     teacher_id=None, semester="2025-2026-1", capacity=60)
@@ -226,8 +261,8 @@ def test_student_delete_cascades_account_enrollments_scores(app: Flask, client: 
 # --------------------------------------------------------------------------- #
 def test_student_write_routes_require_admin(app: Flask, client: FlaskClient):
     """教师 / 学生对学生 CRUD 写路由一律 403，且不产生任何数据变化。"""
-    make_student("stu1", sno="2025001")
-    student = db.session.scalar(select(Student).where(Student.sno == "2025001"))
+    make_student("stu1", sno="25010101")
+    student = db.session.scalar(select(Student).where(Student.sno == "25010101"))
     make_user("t1", "teacher")
 
     for username in ("t1", "stu1"):
@@ -235,12 +270,12 @@ def test_student_write_routes_require_admin(app: Flask, client: FlaskClient):
         login(client_app, username)
 
         assert client_app.post("/admin/students/create", data={
-            "sno": "2025777", "name": "越权学生", "gender": "", "class_name": "",
+            "sno": "25010777", "name": "越权学生", "gender": "", "class_name": "",
             "enroll_year": "2025", "password": "",
         }).status_code == 403
         assert client_app.post(f"/admin/students/{student.id}/delete").status_code == 403
 
-    assert db.session.scalar(select(Student).where(Student.sno == "2025777")) is None
+    assert db.session.scalar(select(Student).where(Student.sno == "25010777")) is None
     assert db.session.get(Student, student.id) is not None
 
 

@@ -148,7 +148,7 @@ def test_student_can_enroll_and_choose_two_courses(app: Flask, client: FlaskClie
     html = client.get("/score/my-courses").get_data(as_text=True)
     assert "数据结构" in html
     assert "操作系统" in html
-    assert "已选 2 门" in html or "（2 门）" in html
+    assert "共 <strong>2</strong> 门课程" in html
 
 
 def test_duplicate_enrollment_is_rejected_without_side_effect(
@@ -857,7 +857,7 @@ def test_student_sees_own_transcript_by_semester(app: Flask, client: FlaskClient
 
     html = client.get("/score/my-scores").get_data(as_text=True)
 
-    assert "学期 2025-2026-1" in html
+    assert "2025-2026-1" in html
     assert "数据结构" in html
     assert "平时" in html and "期末" in html
     assert "95" in html and "88" in html
@@ -878,8 +878,8 @@ def test_student_transcript_shows_ungraded_course(app: Flask, client: FlaskClien
     html = client.get("/score/my-scores").get_data(as_text=True)
 
     assert "线性代数" in html
-    assert "共修读 <strong>1</strong>" in html
-    assert "已出成绩 <strong>0</strong>" in html
+    assert '<span class="stat-num">1</span><span class="stat-label">修读课程</span>' in html
+    assert '<span class="stat-num">0</span><span class="stat-label">已出成绩</span>' in html
 
 
 def test_student_transcript_filter_or_empty_state(app: Flask, client: FlaskClient):
@@ -945,6 +945,157 @@ def test_my_scores_nav_entry_only_for_student(app: Flask):
     admin_client = app.test_client()
     login(admin_client, "admin1")
     assert "/score/my-scores" not in admin_client.get("/").get_data(as_text=True)
+
+
+# --------------------------------------------------------------------------- #
+# 总评成绩构成（教师查看 / 修改平时、期中、期末占比）
+# --------------------------------------------------------------------------- #
+def add_scores(enrollment: Enrollment, **scores: float) -> None:
+    for exam_type, value in scores.items():
+        db.session.add(Score(enrollment_id=enrollment.id, exam_type=exam_type, score=value))
+    db.session.commit()
+
+
+def test_course_detail_shows_default_weights_and_weighted_total(app: Flask, client: FlaskClient):
+    """课程详情展示默认占比（30/30/40）与按占比算出的总评。"""
+    teacher = make_teacher()
+    course = make_course(teacher, "C001", name="数据结构")
+    e = enroll(make_student("s1"), course)
+    add_scores(e, 平时=90.0, 期中=80.0, 期末=70.0)
+    login(client, teacher.user.username)
+
+    html = client.get(f"/score/courses/{course.id}").get_data(as_text=True)
+
+    assert course.weights == {"平时": 30, "期中": 30, "期末": 40}
+    assert "总评占比" in html
+    assert "平时 30% / 期中 30% / 期末 40%" in html
+    assert "总评" in html
+    assert "79.0" in html  # 90*0.3 + 80*0.3 + 70*0.4 = 79.0
+
+
+def test_teacher_can_update_course_weights(app: Flask, client: FlaskClient):
+    """教师可修改自授课程的占比；保存后总评按新占比重算。"""
+    teacher = make_teacher()
+    course = make_course(teacher, "C001", name="数据结构")
+    e = enroll(make_student("s1"), course)
+    add_scores(e, 平时=90.0, 期中=80.0, 期末=70.0)
+    login(client, teacher.user.username)
+
+    response = client.post(
+        f"/score/courses/{course.id}/weights",
+        data={"weight_regular": "50", "weight_midterm": "20", "weight_final": "30"},
+        follow_redirects=True,
+    )
+
+    html = response.get_data(as_text=True)
+    assert "已更新" in html and "平时 50%" in html and "期中 20%" in html and "期末 30%" in html
+    db.session.refresh(course)
+    assert course.weights == {"平时": 50, "期中": 20, "期末": 30}
+    assert "82.0" in html  # 90*0.5 + 80*0.2 + 70*0.3 = 82.0
+
+
+def test_course_weights_must_sum_to_100_and_stay_in_range(app: Flask, client: FlaskClient):
+    """占比校验：单项 0~100、三项合计必须 100%；非法提交不改库。"""
+    teacher = make_teacher()
+    course = make_course(teacher, "C001")
+    login(client, teacher.user.username)
+
+    response = client.post(
+        f"/score/courses/{course.id}/weights",
+        data={"weight_regular": "40", "weight_midterm": "40", "weight_final": "40"},
+        follow_redirects=True,
+    )
+    assert "三项占比之和必须为 100%" in response.get_data(as_text=True)
+    db.session.refresh(course)
+    assert course.weights == {"平时": 30, "期中": 30, "期末": 40}
+
+    response = client.post(
+        f"/score/courses/{course.id}/weights",
+        data={"weight_regular": "-10", "weight_midterm": "50", "weight_final": "60"},
+        follow_redirects=True,
+    )
+    assert "占比需在 0~100 之间" in response.get_data(as_text=True)
+    db.session.refresh(course)
+    assert course.weights == {"平时": 30, "期中": 30, "期末": 40}
+
+
+def test_course_weights_are_row_level_checked(app: Flask, client: FlaskClient):
+    """他人课程 / 学生身份不能改占比（403），且无副作用。"""
+    owner, other = make_teacher("owner"), make_teacher("other")
+    course = make_course(owner, "C001")
+    student = make_student("s1")
+    enroll(student, course)
+
+    other_client = app.test_client()
+    login(other_client, other.user.username)
+    assert other_client.post(
+        f"/score/courses/{course.id}/weights",
+        data={"weight_regular": "0", "weight_midterm": "0", "weight_final": "100"},
+    ).status_code == 403
+
+    student_client = app.test_client()
+    login(student_client, student.user.username)
+    assert student_client.post(
+        f"/score/courses/{course.id}/weights",
+        data={"weight_regular": "0", "weight_midterm": "0", "weight_final": "100"},
+    ).status_code == 403
+
+    db.session.refresh(course)
+    assert course.weights == {"平时": 30, "期中": 30, "期末": 40}
+
+
+def test_student_sees_weights_but_cannot_edit(app: Flask, client: FlaskClient):
+    """学生可查看课程占比与总评，但页面不出现编辑表单。"""
+    teacher = make_teacher()
+    course = make_course(teacher, "C001")
+    student = make_student("s1")
+    e = enroll(student, course)
+    add_scores(e, 平时=90.0, 期中=80.0, 期末=70.0)
+    login(client, student.user.username)
+
+    html = client.get(f"/score/courses/{course.id}").get_data(as_text=True)
+
+    assert "平时 30%" in html and "总评" in html and "79.0" in html
+    assert f"/score/courses/{course.id}/weights" not in html
+    assert "保存占比" not in html
+
+
+def test_transcript_shows_weighted_total_and_missing_types(app: Flask, client: FlaskClient):
+    """成绩单显示每门课的总评；成绩不齐时提示缺哪一项，不拿缺失项当 0 分。"""
+    teacher = make_teacher()
+    complete = make_course(teacher, "C001", name="数据结构")
+    incomplete = make_course(teacher, "C002", name="操作系统")
+    me = make_student("s1")
+    e1, e2 = enroll(me, complete), enroll(me, incomplete)
+    complete.weight_regular, complete.weight_midterm, complete.weight_final = 50, 20, 30
+    add_scores(e1, 平时=90.0, 期中=80.0, 期末=70.0)
+    add_scores(e2, 平时=90.0, 期末=70.0)
+    db.session.commit()
+    login(client, "s1")
+
+    html = client.get("/score/my-scores").get_data(as_text=True)
+
+    assert "82.0" in html and "（50/20/30）" in html
+    assert "缺 期中" in html
+
+
+def test_course_weight_sum_is_enforced_by_database(app: Flask):
+    """数据库 CHECK 约束兜底：合计不等于 100 的课程无法落库。"""
+    from sqlalchemy.exc import IntegrityError
+
+    course = Course(
+        code="C-BAD", name="非法占比", credit=2.0, hours=32, teacher_id=None,
+        semester="2025-2026-1", capacity=10,
+        weight_regular=40, weight_midterm=40, weight_final=40,
+    )
+    db.session.add(course)
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+    else:  # pragma: no cover
+        raise AssertionError("非法占比未被数据库拒绝")
+    assert db.session.scalar(select(Course).where(Course.code == "C-BAD")) is None
 
 
 def test_student_list_links_to_transcript(app: Flask, client: FlaskClient):
