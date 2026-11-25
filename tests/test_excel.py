@@ -104,13 +104,17 @@ def upload(client: FlaskClient, url: str, buffer: io.BytesIO | None, filename: s
 # 导出
 # --------------------------------------------------------------------------- #
 def test_teacher_exports_course_sheet_with_scores(app: Flask, client: FlaskClient):
-    """教师导出自授课程：表头正确、名单齐全、已有成绩回填到对应考核类型列。"""
+    """教师导出自授课程：表头正确、名单齐全、已有成绩回填到对应考核类型列与总评。"""
     teacher = make_teacher("t1")
-    course = make_course(teacher, "C001")
-    s1, s2 = make_student("s1", sno="25010101"), make_student("s2", sno="25010202")
-    e1, e2 = enroll(s1, course), enroll(s2, course)
+    course = make_course(teacher, "C001")           # 默认占比 30/30/40
+    s1, s2, s3 = (make_student("s1", sno="25010101"),
+                  make_student("s2", sno="25010202"),
+                  make_student("s3", sno="25010103"))
+    e1, e2, e3 = enroll(s1, course), enroll(s2, course), enroll(s3, course)
     db.session.add(Score(enrollment_id=e1.id, exam_type="期末", score=88.5))
     db.session.add(Score(enrollment_id=e1.id, exam_type="平时", score=90))
+    for exam_type, value in (("平时", 100), ("期中", 80), ("期末", 90)):
+        db.session.add(Score(enrollment_id=e3.id, exam_type=exam_type, score=value))
     db.session.commit()
     login(client, "t1")
 
@@ -131,10 +135,13 @@ def test_teacher_exports_course_sheet_with_scores(app: Flask, client: FlaskClien
     assert decoded.endswith(".xlsx")
 
     ws = load_workbook(io.BytesIO(response.data)).active
-    assert [c.value for c in ws[1][:6]] == ["学号", "姓名", "班级", "平时", "期中", "期末"]
+    assert [c.value for c in ws[1][:7]] == ["学号", "姓名", "班级", "平时", "期中", "期末", "总评"]
     body = {row[0]: row for row in ws.iter_rows(min_row=2, values_only=True)}
     assert body["25010101"][3] == 90 and body["25010101"][5] == 88.5 and body["25010101"][4] is None  # 期中留白
     assert body["25010202"][3] is None and body["25010202"][4] is None and body["25010202"][5] is None
+    # 总评：三类齐全按占比计算（30%*100 + 30%*80 + 40%*90 = 90），缺一类则留白
+    assert body["25010103"][6] == 90
+    assert body["25010101"][6] is None and body["25010202"][6] is None
 
 
 def test_export_filename_survives_unicode_students(app: Flask, client: FlaskClient):
@@ -365,6 +372,22 @@ def test_import_rejects_non_xlsx_and_bad_files(app: Flask, client: FlaskClient):
     assert "表头缺少「学号」列" in response.get_data(as_text=True)
 
     assert score_count() == 0
+
+
+def test_import_ignores_weighted_total_column(app: Flask, client: FlaskClient):
+    """导入按表头回填：`总评` 列不是考核类型，填了也不会被当成成绩落库。"""
+    teacher = make_teacher("t1")
+    course = make_course(teacher, "C001")
+    s1 = make_student("s1", sno="25010101")
+    enroll(s1, course)
+    login(client, "t1")
+
+    buffer = build_xlsx([["25010101", s1.name, "计算机2501", "85", "", "", "99"]])
+    response = upload(client, f"/score/courses/{course.id}/import", buffer)
+
+    assert "成功 1 条" in response.get_data(as_text=True)
+    rows = list(db.session.scalars(select(Score)).all())
+    assert len(rows) == 1 and rows[0].exam_type == "平时" and rows[0].score == 85  # 99 没被导入
 
 
 def test_import_is_row_level_checked(app: Flask, client: FlaskClient):

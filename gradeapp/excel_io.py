@@ -33,8 +33,9 @@ from .models import EXAM_TYPES, Course, Enrollment, Score, Student
 
 bp = Blueprint("excel", __name__, url_prefix="/score")
 
-#: 导出 / 导入共用的列定义（前 3 列是身份信息，其后是各考核类型）
-EXPORT_COLUMNS: tuple[str, ...] = ("学号", "姓名", "班级") + EXAM_TYPES
+#: 导出 / 导入共用的列定义（前 3 列是身份信息，其后是各考核类型 + 总评）
+#：「总评」按课程占比自动计算（三类成绩齐全才有值），导入时被忽略（不在 EXAM_TYPES 白名单）
+EXPORT_COLUMNS: tuple[str, ...] = ("学号", "姓名", "班级") + EXAM_TYPES + ("总评",)
 
 _HEADER_FILL = PatternFill("solid", fgColor="1D4ED8")
 _HEADER_FONT = Font(color="FFFFFF", bold=True)
@@ -48,6 +49,13 @@ def _styled_header_row(ws, columns) -> None:
         cell.alignment = Alignment(horizontal="center")
         ws.column_dimensions[get_column_letter(col)].width = max(len(title) * 2 + 2, 12)
     ws.freeze_panes = "A2"
+
+
+def _format_number(value: float | None):
+    """成绩 / 总评的单元格格式：整数去掉 .0，缺值留白。"""
+    if value is None:
+        return None
+    return int(value) if value == int(value) else value
 
 
 def _score_value(score_map: dict[tuple[int, str], Score], enrollment_id: int, exam_type: str):
@@ -117,6 +125,14 @@ def export_course(course_id: int):
         ws.cell(row=index, column=3, value=student.class_name if student else "")
         for offset, exam_type in enumerate(EXAM_TYPES, start=4):
             ws.cell(row=index, column=offset, value=_score_value(score_map, e.id, exam_type))
+        # 总评：按课程占比计算（与课程详情页名单、成绩单导出同一口径；
+        # 三类成绩不齐时留白，不拿缺失项当 0 分）。导入时该列被忽略。
+        by_type = {
+            exam_type: record.score
+            for exam_type in EXAM_TYPES
+            if (record := score_map.get((e.id, exam_type))) is not None
+        }
+        ws.cell(row=index, column=len(EXPORT_COLUMNS), value=_format_number(course.weighted_total(by_type)))
 
     return _workbook_response(wb, f"成绩_{course.code}_{course.name}")
 
