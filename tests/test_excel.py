@@ -19,6 +19,7 @@ import io
 from flask import Flask
 from flask.testing import FlaskClient
 from openpyxl import Workbook, load_workbook
+from urllib.parse import unquote
 from sqlalchemy import func, select
 
 from gradeapp.extensions import db
@@ -117,14 +118,50 @@ def test_teacher_exports_course_sheet_with_scores(app: Flask, client: FlaskClien
 
     assert response.status_code == 200
     assert response.mimetype == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    assert "attachment" in response.headers["Content-Disposition"]
-    assert ".xlsx" in response.headers["Content-Disposition"]
+    disposition = response.headers["Content-Disposition"]
+    assert "attachment" in disposition
+    assert ".xlsx" in disposition
+    # 回归：文件名必须按 RFC 5987 编码。HTTP 头只能 latin-1 编码，中文直接放头里
+    # 会在真实服务器（waitress / werkzeug）写响应时抛 UnicodeEncodeError → 500
+    # （pytest 测试客户端不编码头，此断言保证 regress 不再复现）
+    disposition.encode("latin-1")
+    assert "filename*=UTF-8''" in disposition
+    decoded = unquote(disposition.split("''", 1)[1])
+    assert decoded.startswith(f"成绩_{course.code}")
+    assert decoded.endswith(".xlsx")
 
     ws = load_workbook(io.BytesIO(response.data)).active
     assert [c.value for c in ws[1][:6]] == ["学号", "姓名", "班级", "平时", "期中", "期末"]
     body = {row[0]: row for row in ws.iter_rows(min_row=2, values_only=True)}
     assert body["25010101"][3] == 90 and body["25010101"][5] == 88.5 and body["25010101"][4] is None  # 期中留白
     assert body["25010202"][3] is None and body["25010202"][4] is None and body["25010202"][5] is None
+
+
+def test_export_filename_survives_unicode_students(app: Flask, client: FlaskClient):
+    """中文姓名 / 中文课程名进入导出文件名时，响应头仍可被真实服务器安全发送。"""
+    from urllib.parse import unquote
+
+    teacher = make_teacher("t1")
+    course = make_course(teacher, "C001")          # 课程名本身也是中文（"课程C001"）
+    student = make_student("s1", sno="25010101")
+    enroll(student, course)
+
+    # 教师导课程成绩表（文件名含中文课程名）
+    teacher_client = app.test_client()
+    login(teacher_client, "t1")
+    disposition = teacher_client.get(f"/score/courses/{course.id}/export").headers["Content-Disposition"]
+    disposition.encode("latin-1")                  # 真实服务器的编码路径
+    decoded = unquote(disposition.split("''", 1)[1])
+    assert decoded.startswith(f"成绩_{course.code}_") and decoded.endswith(".xlsx")
+
+    # 学生导本人成绩单（文件名含中文姓名）
+    student_client = app.test_client()
+    login(student_client, "s1")
+    disposition = student_client.get("/score/my-scores/export").headers["Content-Disposition"]
+    disposition.encode("latin-1")
+    decoded = unquote(disposition.split("''", 1)[1])
+    assert decoded.startswith("成绩单_") and decoded.endswith(".xlsx")
+
 
 
 def test_teacher_cannot_export_others_course(app: Flask, client: FlaskClient):
