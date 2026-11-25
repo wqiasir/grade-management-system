@@ -18,6 +18,8 @@ from __future__ import annotations
 import io
 from datetime import datetime, timezone
 
+from urllib.parse import quote
+
 from flask import Blueprint, Response, flash, g, redirect, render_template, request, url_for
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -58,14 +60,24 @@ def _score_value(score_map: dict[tuple[int, str], Score], enrollment_id: int, ex
 
 
 def _workbook_response(wb: Workbook, filename: str) -> Response:
+    """把工作簿打包为 .xlsx 下载响应。
+
+    ``Content-Disposition`` 的文件名按 RFC 5987 编码（``filename*=UTF-8''…``）——
+    HTTP 头只能 latin-1 编码，中文直接放头里会在真实服务器（waitress / werkzeug）
+    写响应时抛 ``UnicodeEncodeError`` 变成 500（pytest 测试客户端不编码头，曾漏过此 bug）。
+    ``filename`` 提供 ASCII 回退名，只服务极老的不支持 RFC 5987 的客户端。
+    """
     buffer = io.BytesIO()
     wb.save(buffer)
     buffer.seek(0)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M")
+    encoded = quote(f"{filename}_{timestamp}.xlsx", safe="")  # UTF-8 百分号编码
     return Response(
         buffer.getvalue(),
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}_{timestamp}.xlsx"},
+        headers={
+            "Content-Disposition": f"attachment; filename=grade-export.xlsx; filename*=UTF-8''{encoded}",
+        },
     )
 
 
